@@ -28,3 +28,4 @@ DerivedData/
 *.ipa
 *.xcuserstate
 *.extbuild
+.claude/
