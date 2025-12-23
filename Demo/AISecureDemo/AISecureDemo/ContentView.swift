@@ -15,13 +15,13 @@ struct ContentView: View {
             Text("AISecure Demo")
                 .font(.headline)
 
-            Button("Test OpenAI") {
+            Button("Test OpenAI Direct") {
                 Task {
                     await testOpenAI()
                 }
             }
 
-            Button("Test Anthropic") {
+            Button("Test Anthropic Direct") {
                 Task {
                     await testAnthropic()
                 }
@@ -33,58 +33,72 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Direct Routing Tests
+
+    /// Test direct OpenAI routing with full feature access
+    /// You specify the model in the request
     @MainActor
     func testOpenAI() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: "https://xifm3whdw1.execute-api.us-east-2.amazonaws.com/openai-df56eb4a4befeb88",
+                serviceURL: "https://xifm3whdw1.execute-api.us-east-2.amazonaws.com/openai-0c8bef0e834f7294",
                 partialKey: "c2stcHJvai1mb2JLMHNXbUNFZFlVNUd6OUlXR1NyZWxSWXZaTi1ia1lzc18zbDY3aC1Gd1pPaXFiRjZ6ZjdZak1wQUZNUHA5QTlEQWdHcW1QTA==",
-                backendURL: "https://bee-extras-intellectual-walt.trycloudflare.com"
+                backendURL: "https://str-concord-browsing-helped.trycloudflare.com"
             )
 
-            let chatResponse = try await openAI.chat(messages: [
-                .init(role: "user", content: "Say hello in one sentence in spanish")
-            ])
-            print("OpenAI Response:", chatResponse.choices.first?.message.content ?? "")
+            // With direct routing, YOU specify the model
+            let chatResponse = try await openAI.chat(
+                messages: [
+                    .init(role: "user", content: "Say hello in one sentence in spanish")
+                ],
+                model: "" // You control which model to use
+            )
+
+            print("✅ OpenAI Direct Response:")
+            print("   Content:", chatResponse.choices.first?.message.content ?? "")
+            print("   Model:", chatResponse.model)
+            print("   Tokens:", chatResponse.usage?.totalTokens ?? 0)
         } catch let AISecureError.httpError(status, body) {
-            print("Request failed:", status)
+            print("❌ OpenAI Direct failed:", status)
             if let jsonData = try? JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted]),
                let jsonString = String(data: jsonData, encoding: .utf8) {
                 print("DEBUG INFO:")
                 print(jsonString)
-            } else {
-                print(body)
             }
         } catch {
-            print("Unexpected error:", error)
+            print("❌ Unexpected error:", error)
         }
     }
 
+    /// Test direct Anthropic routing with full feature access
     @MainActor
     func testAnthropic() async {
         do {
             let anthropic = try AISecure.anthropicService(
-                serviceURL: "https://xifm3whdw1.execute-api.us-east-2.amazonaws.com/anthropic-8bffcad853d69314",
+                serviceURL: "https://xifm3whdw1.execute-api.us-east-2.amazonaws.com/anthropic-bf08e7c14d1ef2f8",
                 partialKey: "c2stYW50LWFwaTAzLXdPSmh6QWRHT2NaTGo1YVdfWUZGb1ZsUzJPZWJtU3BhdDRTbWY3WHNR",
-                backendURL: "https://bee-extras-intellectual-walt.trycloudflare.com"
+                backendURL: "https://prove-enjoying-clerk-monetary.trycloudflare.com"
             )
 
+            // With direct routing, YOU specify the model
             let response = try await anthropic.createMessage(
                 messages: [.init(role: "user", content: "Say a common italian phrase")],
                 maxTokens: 100
             )
-            print("Anthropic Response:", response.content.first?.text ?? "")
+
+            print("✅ Anthropic Direct Response:")
+            print("   Content:", response.content.first?.text ?? "")
+            print("   Model:", response.model)
+            print("   Tokens:", response.usage.inputTokens + response.usage.outputTokens)
         } catch let AISecureError.httpError(status, body) {
-            print("Request failed:", status)
+            print("❌ Anthropic Direct failed:", status)
             if let jsonData = try? JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted]),
                let jsonString = String(data: jsonData, encoding: .utf8) {
                 print("DEBUG INFO:")
                 print(jsonString)
-            } else {
-                print(body)
             }
         } catch {
-            print("Unexpected error:", error)
+            print("❌ Unexpected error:", error)
         }
     }
 }

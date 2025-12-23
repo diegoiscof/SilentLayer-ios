@@ -8,37 +8,37 @@
 import Foundation
 import Security
 
-final class AISecureStorage: Sendable {
-    private let service = "app.aisecure.service"
+public struct AISecureStorage: Sendable {
+    private let serviceName = "com.aisecure.sessions"
 
-    func saveSession(_ session: AISecureSession, for key: String) {
-        guard let data = try? JSONEncoder().encode(session) else {
-            return
-        }
+    public init() {}
+
+    public func saveSession(_ session: AISecureSession, for serviceURL: String) throws {
+        let data = try JSONEncoder().encode(session)
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: serviceURL,
+            kSecValueData as String: data
         ]
 
-        // Delete existing item first
+        // Delete existing item
         SecItemDelete(query as CFDictionary)
 
         // Add new item
         let status = SecItemAdd(query as CFDictionary, nil)
-        if status != errSecSuccess {
-            logIf(.error)?.error("[AISecureStorage] Failed to save session: \(status)")
+
+        guard status == errSecSuccess else {
+            throw AISecureError.invalidConfiguration("Failed to save session to keychain")
         }
     }
 
-    func getSession(for key: String) -> AISecureSession? {
+    public func loadSession(for serviceURL: String) throws -> AISecureSession {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: serviceURL,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -47,28 +47,18 @@ final class AISecureStorage: Sendable {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         guard status == errSecSuccess,
-              let data = result as? Data,
-              let session = try? JSONDecoder().decode(AISecureSession.self, from: data) else {
-            return nil
+              let data = result as? Data else {
+            throw AISecureError.invalidConfiguration("No session found in keychain")
         }
 
-        return session
+        return try JSONDecoder().decode(AISecureSession.self, from: data)
     }
 
-    func deleteSession(for key: String) {
+    public func deleteSession(for serviceURL: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
-
-        SecItemDelete(query as CFDictionary)
-    }
-
-    func clearAllSessions() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: serviceURL
         ]
 
         SecItemDelete(query as CFDictionary)

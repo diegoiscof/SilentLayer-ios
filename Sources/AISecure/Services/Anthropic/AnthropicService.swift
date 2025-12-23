@@ -25,108 +25,81 @@ import Foundation
         self.urlSession = urlSession
     }
 
-    /// Creates a message completion request
+    /// Creates a message with Claude
     ///
     /// - Parameters:
-    ///   - messages: Array of messages in the conversation
-    ///   - model: The model to use (default: "claude-3-5-sonnet-20241022")
-    ///   - maxTokens: Maximum tokens to generate (default: 1024)
-    ///   - temperature: Sampling temperature between 0 and 1 (default: 1.0)
-    ///   - system: Optional system prompt
+    ///   - messages: Array of messages
+    ///   - model: The model to use (default: "claude-sonnet-4-5-20250929")
+    ///   - maxTokens: Maximum tokens to generate
+    ///   - temperature: Sampling temperature between 0 and 1 (default: 0.7)
     /// - Returns: The message response
     public func createMessage(
         messages: [AnthropicMessage],
         model: String = "claude-sonnet-4-5-20250929",
         maxTokens: Int = 1024,
-        temperature: Double = 1.0,
-        system: String? = nil
+        temperature: Double = 0.7
     ) async throws -> AnthropicMessageResponse {
         guard !messages.isEmpty else {
             throw AISecureError.invalidConfiguration("Messages cannot be empty")
-        }
-        guard maxTokens > 0 else {
-            throw AISecureError.invalidConfiguration("Max tokens must be greater than 0")
         }
         guard (0...1).contains(temperature) else {
             throw AISecureError.invalidConfiguration("Temperature must be between 0 and 1")
         }
 
-        var body: [String: Any] = [
+        let body: [String: Any] = [
             "model": model,
+            "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "max_tokens": maxTokens,
-            "messages": messages.map { ["role": $0.role, "content": $0.content] }
+            "temperature": temperature
         ]
 
-        if let system = system {
-            body["system"] = system
-        }
-
-        if temperature != 1.0 {
-            body["temperature"] = temperature
-        }
-
         return try await jsonRequest(
-            provider: "anthropic",
             endpoint: "/v1/messages",
             body: body,
             response: AnthropicMessageResponse.self
         )
     }
 
-    /// Creates a message completion with streaming disabled (alias for createMessage)
-    ///
-    /// - Parameters:
-    ///   - messages: Array of messages in the conversation
-    ///   - model: The model to use
-    ///   - maxTokens: Maximum tokens to generate
-    ///   - temperature: Sampling temperature
-    ///   - system: Optional system prompt
-    /// - Returns: The message response
-    public func messages(
-        messages: [AnthropicMessage],
-        model: String = "claude-3-5-sonnet-20241022",
-        maxTokens: Int = 1024,
-        temperature: Double = 1.0,
-        system: String? = nil
-    ) async throws -> AnthropicMessageResponse {
-        return try await createMessage(
-            messages: messages,
-            model: model,
-            maxTokens: maxTokens,
-            temperature: temperature,
-            system: system
-        )
-    }
-
     // MARK: - Private Methods
 
     private func jsonRequest<T: Decodable>(
-        provider: String,
         endpoint: String,
         body: [String: Any],
         response: T.Type
     ) async throws -> T {
-        let session = try await sessionManager.getValidSession()
-        let service = configuration.service
+        var retriedOnce = false
 
-        let bodyData = try JSONSerialization.data(withJSONObject: body)
-        var request = requestBuilder.buildRequest(
-            endpoint: endpoint,
-            body: bodyData,
-            session: session,
-            service: service
-        )
+        while true {
+            let session = try await sessionManager.getValidSession(forceRefresh: retriedOnce)
+            let service = configuration.service
 
-        // Add Anthropic-specific headers
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let request = requestBuilder.buildRequest(
+                endpoint: endpoint,
+                body: bodyData,
+                session: session,
+                service: service
+            )
 
-        let (data, urlResponse) = try await urlSession.data(for: request)
-        try validate(response: urlResponse, data: data)
+            logIf(.debug)?.debug("➡️ Request to \(endpoint)")
 
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw AISecureError.decodingError(error)
+            let (data, urlResponse) = try await urlSession.data(for: request)
+
+            // Check for 401 error - session expired
+            if let http = urlResponse as? HTTPURLResponse, http.statusCode == 401, !retriedOnce {
+                logIf(.info)?.info("⚠️ Session expired, refreshing and retrying...")
+                sessionManager.invalidateSession()
+                retriedOnce = true
+                continue
+            }
+
+            try validate(response: urlResponse, data: data)
+
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw AISecureError.decodingError(error)
+            }
         }
     }
 

@@ -6,7 +6,7 @@ import Foundation
 public enum AISecure {
 
     /// The current SDK version
-    nonisolated public static let sdkVersion = "1.0.0"
+    nonisolated public static let sdkVersion = "2.0.0"
 
     /// Configures the AISecure SDK logging level
     ///
@@ -15,10 +15,17 @@ public enum AISecure {
         AISecureLogLevel.callerDesiredLogLevel = logLevel
     }
 
+    // MARK: - Service Initialization
+
     /// Creates an OpenAI service instance
     ///
+    /// Features:
+    /// - Full OpenAI API support (chat, embeddings, audio, vision, etc.)
+    /// - Model can be specified from SDK or configured in dashboard
+    /// - Raw OpenAI response format
+    ///
     /// - Parameters:
-    ///   - serviceURL: The service gateway URL
+    ///   - serviceURL: The service gateway URL (format: https://api.gateway.com/openai-{serviceId})
     ///   - partialKey: The partial API key
     ///   - backendURL: The AISecure backend URL
     ///
@@ -52,8 +59,13 @@ public enum AISecure {
 
     /// Creates an Anthropic service instance
     ///
+    /// Features:
+    /// - Full Anthropic API support (messages, function calling, vision, etc.)
+    /// - Model can be specified from SDK or configured in dashboard
+    /// - Raw Anthropic response format
+    ///
     /// - Parameters:
-    ///   - serviceURL: The service gateway URL
+    ///   - serviceURL: The service gateway URL (format: https://api.gateway.com/anthropic-{serviceId})
     ///   - partialKey: The partial API key
     ///   - backendURL: The AISecure backend URL
     ///

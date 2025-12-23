@@ -8,7 +8,7 @@
 import Foundation
 import CryptoKit
 
-@AISecureActor protocol AISecureRequestBuilder: Sendable {
+public protocol AISecureRequestBuilder: Sendable {
     func buildRequest(
         endpoint: String,
         body: Data,
@@ -17,24 +17,41 @@ import CryptoKit
     ) -> URLRequest
 }
 
-@AISecureActor struct AISecureDefaultRequestBuilder: AISecureRequestBuilder {
+public struct AISecureDefaultRequestBuilder: AISecureRequestBuilder, Sendable {
     private let configuration: AISecureConfiguration
 
-    nonisolated init(configuration: AISecureConfiguration) {
+    public init(configuration: AISecureConfiguration) {
         self.configuration = configuration
     }
 
-    func buildRequest(
+    public func buildRequest(
         endpoint: String,
         body: Data,
         session: AISecureSession,
         service: AISecureServiceConfig
     ) -> URLRequest {
-        var request = URLRequest(url: service.serviceURL.appendingPathComponent(endpoint))
+        // Build the full URL
+        // For universal routing, endpoint is empty, use serviceURL directly
+        // For direct routing, append endpoint to serviceURL
+        let urlString: String
+        if endpoint.isEmpty {
+            // Universal routing - use service URL as-is
+            urlString = service.serviceURL
+        } else {
+            // Direct routing - append endpoint
+            urlString = service.serviceURL + endpoint
+        }
+
+        guard let url = URL(string: urlString) else {
+            fatalError("Invalid service URL: \(urlString)")
+        }
+
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // Sign the request with HMAC
         sign(
             request: &request,
             body: body,
@@ -61,8 +78,16 @@ import CryptoKit
         request.setValue(configuration.deviceFingerprint, forHTTPHeaderField: "x-device-fingerprint")
         request.setValue(service.provider, forHTTPHeaderField: "x-provider")
 
-        // 🔴 CRITICAL: endpoint must include leading slash (Lambda uses "/v1/...")
-        let normalizedEndpoint = endpoint.hasPrefix("/") ? endpoint : "/" + endpoint
+        // 🔴 CRITICAL: endpoint must include leading slash for direct routing
+        // For universal routing, endpoint is empty string ""
+        let normalizedEndpoint: String
+        if endpoint.isEmpty {
+            normalizedEndpoint = "" // Universal routing - no endpoint
+        } else if endpoint.hasPrefix("/") {
+            normalizedEndpoint = endpoint // Already has leading slash
+        } else {
+            normalizedEndpoint = "/" + endpoint // Add leading slash
+        }
 
         let bodyBase64 = body.base64EncodedString()
         let message = "\(timestamp):\(normalizedEndpoint):\(bodyBase64):\(session.sessionToken)"
@@ -80,8 +105,20 @@ import CryptoKit
             forHTTPHeaderField: "x-signature"
         )
 
-        logIf(.debug)?.debug("➡️ Request to \(endpoint)")
+        // Log request details
+        let logEndpoint = endpoint.isEmpty ? "(universal routing)" : endpoint
+        logIf(.debug)?.debug("➡️ Request to \(logEndpoint)")
         let headers = request.allHTTPHeaderFields ?? [:]
         logIf(.debug)?.debug("Headers: \(headers)")
+
+        // Log request body for debugging model injection
+        if let bodyString = String(data: body, encoding: .utf8),
+           let bodyJSON = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+            if let model = bodyJSON["model"] as? String {
+                logIf(.debug)?.debug("Request body model: \(model)")
+            } else {
+                logIf(.debug)?.debug("Request body has no model (will use dashboard default)")
+            }
+        }
     }
 }

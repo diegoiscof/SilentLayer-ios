@@ -9,25 +9,34 @@ import Foundation
 
 public struct AISecureServiceConfig: Sendable {
     public let provider: String
-    public let serviceURL: URL
+    public let serviceURL: String
     public let partialKey: String
 
-    public init(provider: String, serviceURL: String, partialKey: String) throws {
+    /// Creates a service configuration
+    ///
+    /// - Parameters:
+    ///   - provider: The AI provider (e.g., "openai", "anthropic", "google")
+    ///   - serviceURL: The full service URL
+    ///   - partialKey: The partial API key from the backend
+    ///
+    /// - Throws: AISecureError if the configuration is invalid
+    public init(
+        provider: String,
+        serviceURL: String,
+        partialKey: String
+    ) throws {
         guard !provider.isEmpty else {
             throw AISecureError.invalidConfiguration("Provider cannot be empty")
         }
-
-        let trimmedURL = serviceURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: trimmedURL) else {
-            throw AISecureError.invalidConfiguration("Invalid service URL: \(serviceURL)")
+        guard !serviceURL.isEmpty else {
+            throw AISecureError.invalidConfiguration("Service URL cannot be empty")
         }
-
         guard !partialKey.isEmpty else {
             throw AISecureError.invalidConfiguration("Partial key cannot be empty")
         }
 
         self.provider = provider
-        self.serviceURL = url
+        self.serviceURL = serviceURL
         self.partialKey = partialKey
     }
 }

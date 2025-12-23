@@ -34,8 +34,8 @@ import Foundation
     /// - Returns: The chat completion response
     public func chat(
         messages: [ChatMessage],
-        model: String = "gpt-4",
-        temperature: Double = 0.7
+        model: String = "",
+        temperature: Double = 1
     ) async throws -> OpenAIChatResponse {
         guard !messages.isEmpty else {
             throw AISecureError.invalidConfiguration("Messages cannot be empty")
@@ -51,7 +51,6 @@ import Foundation
         ]
 
         return try await jsonRequest(
-            provider: "openai",
             endpoint: "/v1/chat/completions",
             body: body,
             response: OpenAIChatResponse.self
@@ -78,7 +77,6 @@ import Foundation
         ]
 
         return try await jsonRequest(
-            provider: "openai",
             endpoint: "/v1/embeddings",
             body: body,
             response: OpenAIEmbeddingsResponse.self
@@ -108,7 +106,6 @@ import Foundation
         ]
 
         return try await binaryRequest(
-            provider: "openai",
             endpoint: "/v1/audio/speech",
             body: body
         )
@@ -117,58 +114,84 @@ import Foundation
     // MARK: - Private Methods
 
     private func jsonRequest<T: Decodable>(
-        provider: String,
         endpoint: String,
         body: [String: Any],
         response: T.Type
     ) async throws -> T {
-        let session = try await sessionManager.getValidSession()
-        let service = configuration.service
+        var retriedOnce = false
 
-        let bodyData = try JSONSerialization.data(withJSONObject: body)
-        let request = requestBuilder.buildRequest(
-            endpoint: endpoint,
-            body: bodyData,
-            session: session,
-            service: service
-        )
+        while true {
+            let session = try await sessionManager.getValidSession(forceRefresh: retriedOnce)
+            let service = configuration.service
 
-        let (data, urlResponse) = try await urlSession.data(for: request)
-        try validate(response: urlResponse, data: data)
+            let bodyData = try JSONSerialization.data(withJSONObject: body)
+            let request = requestBuilder.buildRequest(
+                endpoint: endpoint,
+                body: bodyData,
+                session: session,
+                service: service
+            )
 
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw AISecureError.decodingError(error)
+            logIf(.debug)?.debug("➡️ Request to \(endpoint)")
+
+            let (data, urlResponse) = try await urlSession.data(for: request)
+
+            // Check for 401 error - session expired
+            if let http = urlResponse as? HTTPURLResponse, http.statusCode == 401, !retriedOnce {
+                logIf(.info)?.info("⚠️ Session expired, refreshing and retrying...")
+                sessionManager.invalidateSession()
+                retriedOnce = true
+                continue
+            }
+
+            try validate(response: urlResponse, data: data)
+
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw AISecureError.decodingError(error)
+            }
         }
     }
 
     private func binaryRequest(
-        provider: String,
         endpoint: String,
         body: [String: Any]
     ) async throws -> Data {
-        let session = try await sessionManager.getValidSession()
-        let service = configuration.service
+        var retriedOnce = false
 
-        let bodyData = try JSONSerialization.data(
-            withJSONObject: body,
-            options: [.sortedKeys]
-        )
+        while true {
+            let session = try await sessionManager.getValidSession(forceRefresh: retriedOnce)
+            let service = configuration.service
 
-        let request = requestBuilder.buildRequest(
-            endpoint: endpoint,
-            body: bodyData,
-            session: session,
-            service: service
-        )
+            let bodyData = try JSONSerialization.data(
+                withJSONObject: body,
+                options: [.sortedKeys]
+            )
 
-        logIf(.debug)?.debug("➡️ Binary request to \(endpoint)")
+            let request = requestBuilder.buildRequest(
+                endpoint: endpoint,
+                body: bodyData,
+                session: session,
+                service: service
+            )
 
-        let (data, urlResponse) = try await urlSession.data(for: request)
-        try validate(response: urlResponse, data: data)
+            logIf(.debug)?.debug("➡️ Binary request to \(endpoint)")
 
-        return data
+            let (data, urlResponse) = try await urlSession.data(for: request)
+
+            // Check for 401 error - session expired
+            if let http = urlResponse as? HTTPURLResponse, http.statusCode == 401, !retriedOnce {
+                logIf(.info)?.info("⚠️ Session expired, refreshing and retrying...")
+                sessionManager.invalidateSession()
+                retriedOnce = true
+                continue
+            }
+
+            try validate(response: urlResponse, data: data)
+
+            return data
+        }
     }
 
     private func validate(response: URLResponse, data: Data) throws {

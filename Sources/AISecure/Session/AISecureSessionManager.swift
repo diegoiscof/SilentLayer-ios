@@ -7,113 +7,94 @@
 
 import Foundation
 
-@AISecureActor final class AISecureSessionManager: Sendable {
+@AISecureActor public class AISecureSessionManager: Sendable {
     private let configuration: AISecureConfiguration
     private let storage: AISecureStorage
     private let urlSession: URLSession
 
-    nonisolated(unsafe) private var _currentSession: AISecureSession?
-    private var currentSession: AISecureSession? {
-        get {
-            ProtectedPropertyQueue.session.sync { self._currentSession }
-        }
-        set {
-            ProtectedPropertyQueue.session.async(flags: .barrier) { self._currentSession = newValue }
-        }
-    }
+    private var cachedSession: AISecureSession?
 
-    private var refreshTask: Task<AISecureSession, Error>?
-
-    nonisolated init(configuration: AISecureConfiguration, storage: AISecureStorage, urlSession: URLSession) {
+    nonisolated init(
+        configuration: AISecureConfiguration,
+        storage: AISecureStorage,
+        urlSession: URLSession
+    ) {
         self.configuration = configuration
         self.storage = storage
         self.urlSession = urlSession
     }
 
-    func getValidSession() async throws -> AISecureSession {
-        let nowMillis = Date().timeIntervalSince1970 * 1000
+    public func getValidSession(forceRefresh: Bool = false) async throws -> AISecureSession {
+        // Force refresh skips cache check
+        if !forceRefresh {
+            // Check cached session first
+            if let cached = cachedSession, !cached.isExpired {
+                logIf(.debug)?.debug("✅ Using cached session")
+                return cached
+            }
 
-        if let session = currentSession, isSessionValid(session, at: nowMillis) {
-            return session
+            // Check storage
+            if let stored = try? storage.loadSession(for: configuration.service.serviceURL),
+               !stored.isExpired {
+                logIf(.debug)?.debug("✅ Using stored session")
+                cachedSession = stored
+                return stored
+            }
+        } else {
+            logIf(.debug)?.debug("🔄 Force refreshing session (previous session expired)")
         }
 
-        let storageKey = configuration.service.serviceURL.absoluteString
-        if let cached = storage.getSession(for: storageKey),
-           isSessionValid(cached, at: nowMillis) {
-            currentSession = cached
-            return cached
-        }
-
-        if let task = refreshTask {
-            return try await task.value
-        }
-
-        let task = Task {
-            let session = try await refreshSession()
-            currentSession = session
-            storage.saveSession(session, for: storageKey)
-            refreshTask = nil
-            return session
-        }
-
-        refreshTask = task
-        return try await task.value
+        // Create new session
+        logIf(.debug)?.debug("🔄 Creating new session")
+        let session = try await createSession()
+        cachedSession = session
+        try? storage.saveSession(session, for: configuration.service.serviceURL)
+        return session
     }
 
-    func invalidateSession() {
-        currentSession = nil
-        let storageKey = configuration.service.serviceURL.absoluteString
-        storage.deleteSession(for: storageKey)
+    /// Invalidate the current session (called when server returns 401)
+    public func invalidateSession() {
+        cachedSession = nil
+        storage.deleteSession(for: configuration.service.serviceURL)
     }
 
-    private func isSessionValid(_ session: AISecureSession, at nowMillis: TimeInterval) -> Bool {
-        return session.expiresAt > nowMillis
-    }
+    private func createSession() async throws -> AISecureSession {
+        let endpoint = configuration.backendURL.appendingPathComponent("api/sessions")
 
-    private func refreshSession() async throws -> AISecureSession {
-        logIf(.debug)?.debug("🔑 Refreshing session at: \(self.configuration.backendURL)")
-
-        var request = URLRequest(url: configuration.backendURL.appendingPathComponent("/api/sessions"))
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        // Create rich device metadata
-        let metadataString = await DeviceMetadata.generateMetadataString(partialKey: configuration.service.partialKey)
+        // Generate rich device metadata
+        let metadataString = await DeviceMetadata.generateMetadataString(
+            partialKey: configuration.service.partialKey
+        )
         let metadataBase64 = Data(metadataString.utf8).base64EncodedString()
 
-        let body: [String: Any] = [
-            "serviceURL": configuration.service.serviceURL.absoluteString,
+        let body: [String: String] = [
+            "serviceURL": configuration.service.serviceURL,
             "deviceFingerprint": configuration.deviceFingerprint,
             "metadata": metadataBase64
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        logIf(.debug)?.debug("➡️ Creating session for \(self.configuration.service.serviceURL)")
 
         let (data, response) = try await urlSession.data(for: request)
-        try validate(response: response, data: data)
 
-        return try JSONDecoder().decode(AISecureSession.self, from: data)
-    }
-
-    private func validate(response: URLResponse, data: Data) throws {
-        guard let http = response as? HTTPURLResponse else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw AISecureError.invalidResponse
         }
 
-        guard (200...299).contains(http.statusCode) else {
-            let body: Any
-            do {
-                body = try JSONSerialization.jsonObject(with: data)
-            } catch {
-                body = [
-                    "error": "Failed to parse error response",
-                    "raw": String(data: data, encoding: .utf8) ?? "Unable to decode data"
-                ]
-            }
-
-            logIf(.error)?.error("HTTP \(http.statusCode) error: \(String(describing: body))")
-            throw AISecureError.httpError(status: http.statusCode, body: body)
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorBody = try? JSONSerialization.jsonObject(with: data)
+            logIf(.error)?.error("Session creation failed: \(httpResponse.statusCode)")
+            throw AISecureError.httpError(status: httpResponse.statusCode, body: errorBody ?? [:])
         }
+
+        let session = try JSONDecoder().decode(AISecureSession.self, from: data)
+        logIf(.debug)?.debug("✅ Session created, expires at \(session.expiresAt)")
+        return session
     }
 }
-

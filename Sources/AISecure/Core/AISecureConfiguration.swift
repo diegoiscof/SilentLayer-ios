@@ -8,11 +8,11 @@
 import Foundation
 
 public struct AISecureConfiguration: Sendable {
-    let backendURL: URL
-    let deviceFingerprint: String
-    let service: AISecureServiceConfig
+    public let backendURL: URL
+    public let deviceFingerprint: String
+    public let service: AISecureServiceConfig
 
-    init(
+    public init(
         backendURL: URL,
         deviceFingerprint: String,
         service: AISecureServiceConfig

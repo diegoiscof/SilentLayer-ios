@@ -7,12 +7,20 @@
 
 import Foundation
 
-struct AISecureSession: Codable, Sendable {
-    let sessionToken: String
-    let expiresAt: TimeInterval
+public struct AISecureSession: Codable, Sendable {
+    public let sessionToken: String
+    public let expiresAt: Int
+    public let provider: String
+    public let serviceURL: String
 
-    var isExpired: Bool {
-        let nowMillis = Date().timeIntervalSince1970 * 1000
-        return expiresAt <= nowMillis
+    public var isExpired: Bool {
+        return Date().timeIntervalSince1970 > Double(expiresAt)
+    }
+
+    public init(sessionToken: String, expiresAt: Int, provider: String, serviceURL: String) {
+        self.sessionToken = sessionToken
+        self.expiresAt = expiresAt
+        self.provider = provider
+        self.serviceURL = serviceURL
     }
 }
