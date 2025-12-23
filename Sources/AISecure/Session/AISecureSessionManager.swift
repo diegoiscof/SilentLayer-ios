@@ -37,7 +37,8 @@ import Foundation
             return session
         }
 
-        if let cached = storage.getSession(for: configuration.projectId),
+        let storageKey = configuration.service.serviceURL.absoluteString
+        if let cached = storage.getSession(for: storageKey),
            isSessionValid(cached, at: nowMillis) {
             currentSession = cached
             return cached
@@ -50,7 +51,7 @@ import Foundation
         let task = Task {
             let session = try await refreshSession()
             currentSession = session
-            storage.saveSession(session, for: configuration.projectId)
+            storage.saveSession(session, for: storageKey)
             refreshTask = nil
             return session
         }
@@ -61,7 +62,8 @@ import Foundation
 
     func invalidateSession() {
         currentSession = nil
-        storage.deleteSession(for: configuration.projectId)
+        let storageKey = configuration.service.serviceURL.absoluteString
+        storage.deleteSession(for: storageKey)
     }
 
     private func isSessionValid(_ session: AISecureSession, at nowMillis: TimeInterval) -> Bool {
@@ -75,9 +77,14 @@ import Foundation
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let body = [
-            "projectId": configuration.projectId,
-            "deviceFingerprint": configuration.deviceFingerprint
+        // Create rich device metadata
+        let metadataString = await DeviceMetadata.generateMetadataString(partialKey: configuration.service.partialKey)
+        let metadataBase64 = Data(metadataString.utf8).base64EncodedString()
+
+        let body: [String: Any] = [
+            "serviceURL": configuration.service.serviceURL.absoluteString,
+            "deviceFingerprint": configuration.deviceFingerprint,
+            "metadata": metadataBase64
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
@@ -109,3 +116,4 @@ import Foundation
         }
     }
 }
+

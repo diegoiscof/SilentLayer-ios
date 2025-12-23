@@ -9,9 +9,9 @@ import Foundation
 import Security
 
 final class AISecureStorage: Sendable {
-    private let service = "com.aisecure.app"
+    private let service = "app.aisecure.service"
 
-    func saveSession(_ session: AISecureSession, for projectId: String) {
+    func saveSession(_ session: AISecureSession, for key: String) {
         guard let data = try? JSONEncoder().encode(session) else {
             return
         }
@@ -19,7 +19,7 @@ final class AISecureStorage: Sendable {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: projectId,
+            kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
@@ -34,11 +34,11 @@ final class AISecureStorage: Sendable {
         }
     }
 
-    func getSession(for projectId: String) -> AISecureSession? {
+    func getSession(for key: String) -> AISecureSession? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: projectId,
+            kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -55,11 +55,11 @@ final class AISecureStorage: Sendable {
         return session
     }
 
-    func deleteSession(for projectId: String) {
+    func deleteSession(for key: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: projectId
+            kSecAttrAccount as String: key
         ]
 
         SecItemDelete(query as CFDictionary)

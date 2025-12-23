@@ -18,8 +18,8 @@ public enum AISecure {
     /// Creates an OpenAI service instance
     ///
     /// - Parameters:
-    ///   - projectId: Your AISecure project ID
-    ///   - services: Array of service configurations
+    ///   - serviceURL: The service gateway URL
+    ///   - partialKey: The partial API key
     ///   - backendURL: The AISecure backend URL
     ///
     /// - Returns: An instance of OpenAIService configured and ready to make requests
@@ -27,13 +27,18 @@ public enum AISecure {
     /// - Throws: AISecureError if the configuration is invalid
     @MainActor
     public static func openAIService(
-        projectId: String,
-        services: [AISecureServiceConfig],
+        serviceURL: String,
+        partialKey: String,
         backendURL: String
     ) throws -> OpenAIService {
+        let service = try AISecureServiceConfig(
+            provider: "openai",
+            serviceURL: serviceURL,
+            partialKey: partialKey
+        )
+
         let (configuration, sessionManager, requestBuilder, urlSession) = try createServiceDependencies(
-            projectId: projectId,
-            services: services,
+            service: service,
             backendURL: backendURL
         )
 
@@ -48,8 +53,8 @@ public enum AISecure {
     /// Creates an Anthropic service instance
     ///
     /// - Parameters:
-    ///   - projectId: Your AISecure project ID
-    ///   - services: Array of service configurations
+    ///   - serviceURL: The service gateway URL
+    ///   - partialKey: The partial API key
     ///   - backendURL: The AISecure backend URL
     ///
     /// - Returns: An instance of AnthropicService configured and ready to make requests
@@ -57,13 +62,18 @@ public enum AISecure {
     /// - Throws: AISecureError if the configuration is invalid
     @MainActor
     public static func anthropicService(
-        projectId: String,
-        services: [AISecureServiceConfig],
+        serviceURL: String,
+        partialKey: String,
         backendURL: String
     ) throws -> AnthropicService {
+        let service = try AISecureServiceConfig(
+            provider: "anthropic",
+            serviceURL: serviceURL,
+            partialKey: partialKey
+        )
+
         let (configuration, sessionManager, requestBuilder, urlSession) = try createServiceDependencies(
-            projectId: projectId,
-            services: services,
+            service: service,
             backendURL: backendURL
         )
 
@@ -79,27 +89,19 @@ public enum AISecure {
 
     @MainActor
     private static func createServiceDependencies(
-        projectId: String,
-        services: [AISecureServiceConfig],
+        service: AISecureServiceConfig,
         backendURL: String
     ) throws -> (AISecureConfiguration, AISecureSessionManager, AISecureRequestBuilder, URLSession) {
-        guard !projectId.isEmpty else {
-            throw AISecureError.invalidConfiguration("Project ID cannot be empty")
-        }
         guard let url = URL(string: backendURL) else {
             throw AISecureError.invalidConfiguration("Invalid backend URL: \(backendURL)")
         }
-        guard !services.isEmpty else {
-            throw AISecureError.invalidConfiguration("At least one service must be configured")
-        }
 
-        let deviceFingerprint = DeviceFingerprint.generate(for: projectId)
+        let deviceFingerprint = DeviceFingerprint.generate()
 
         let configuration = AISecureConfiguration(
-            projectId: projectId,
             backendURL: url,
             deviceFingerprint: deviceFingerprint,
-            services: services
+            service: service
         )
 
         let urlSession = createURLSession()

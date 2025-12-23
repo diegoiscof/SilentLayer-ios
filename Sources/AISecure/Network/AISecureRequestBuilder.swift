@@ -55,7 +55,6 @@ import CryptoKit
     ) {
         let timestamp = String(Int(Date().timeIntervalSince1970))
 
-        request.setValue(configuration.projectId, forHTTPHeaderField: "x-project-id")
         request.setValue(service.partialKey, forHTTPHeaderField: "x-partial-key")
         request.setValue(session.sessionToken, forHTTPHeaderField: "x-session-token")
         request.setValue(timestamp, forHTTPHeaderField: "x-timestamp")

@@ -123,10 +123,7 @@ import Foundation
         response: T.Type
     ) async throws -> T {
         let session = try await sessionManager.getValidSession()
-
-        guard let service = configuration.service(for: provider) else {
-            throw AISecureError.providerNotConfigured(provider)
-        }
+        let service = configuration.service
 
         let bodyData = try JSONSerialization.data(withJSONObject: body)
         let request = requestBuilder.buildRequest(
@@ -152,10 +149,7 @@ import Foundation
         body: [String: Any]
     ) async throws -> Data {
         let session = try await sessionManager.getValidSession()
-
-        guard let service = configuration.service(for: provider) else {
-            throw AISecureError.providerNotConfigured(provider)
-        }
+        let service = configuration.service
 
         let bodyData = try JSONSerialization.data(
             withJSONObject: body,
