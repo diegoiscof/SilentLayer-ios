@@ -145,7 +145,7 @@ public enum AISecure {
             throw AISecureError.invalidConfiguration("Invalid backend URL: \(backendURL)")
         }
 
-        let deviceFingerprint = DeviceFingerprint.generate()
+        let deviceFingerprint = DeviceIdentifier.get()
         let urlSession = createURLSession()
         let storage = AISecureStorage()
 
@@ -190,7 +190,7 @@ public enum AISecure {
             throw AISecureError.invalidConfiguration("Invalid backend URL: \(backendURL)")
         }
 
-        let deviceFingerprint = DeviceFingerprint.generate()
+        let deviceFingerprint = DeviceIdentifier.get()
 
         let configuration = AISecureConfiguration(
             backendURL: url,
