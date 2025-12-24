@@ -11,8 +11,9 @@ public enum AISecure {
     /// Configures the AISecure SDK logging level
     ///
     /// - Parameter logLevel: The minimum log level to display
-    nonisolated public static func configure(logLevel: AISecureLogLevel) {
+    nonisolated public static func configure(logLevel: AISecureLogLevel, timestamps: Bool) {
         AISecureLogLevel.callerDesiredLogLevel = logLevel
+        AISecureLogLevel.showTimestamps = timestamps
     }
 
     // MARK: - Service Initialization

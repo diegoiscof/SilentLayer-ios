@@ -113,8 +113,7 @@ public struct AISecureDefaultRequestBuilder: AISecureRequestBuilder, Sendable {
         logIf(.debug)?.debug("Headers: \(headers)")
 
         // Log request body for debugging model injection
-        if let bodyString = String(data: body, encoding: .utf8),
-           let bodyJSON = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+        if let bodyJSON = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
             if let model = bodyJSON["model"] as? String {
                 logIf(.debug)?.debug("Request body model: \(model)")
             } else {

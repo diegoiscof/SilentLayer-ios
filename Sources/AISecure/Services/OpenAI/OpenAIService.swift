@@ -28,24 +28,6 @@ import Foundation
         self.deviceAuthenticator = deviceAuthenticator
     }
 
-    /// Get service config with credentials from JWT (if using JWT auth)
-    private func getServiceConfig() async throws -> AISecureServiceConfig {
-        guard let authenticator = deviceAuthenticator else {
-            // No JWT auth, use existing config
-            return configuration.service
-        }
-
-        // Get JWT and decode to extract partialKey
-        let jwt = try await authenticator.getValidJWT()
-        let payload = try jwt.decodePayload()
-
-        // Create service config with partialKey from JWT
-        return try AISecureServiceConfig(
-            provider: payload.provider,
-            serviceURL: configuration.service.serviceURL,
-            partialKey: payload.partialKey
-        )
-    }
 
     /// Creates a chat completion request
     ///
@@ -144,14 +126,33 @@ import Foundation
         var jwtRetried = false
 
         while true {
-            // 🔑 Get credentials from JWT first (needed for session creation signature)
-            let service = try await getServiceConfig()
+            // 🔑 Get JWT and decode payload
+            let jwt = try await deviceAuthenticator?.getValidJWT()
+            let payload = try jwt?.decodePayload()
 
-            // Pass partialKey to session manager for signature verification
-            let session = try await sessionManager.getValidSession(
-                forceRefresh: retriedOnce,
-                partialKey: service.partialKey
-            )
+            // Get service config from JWT (or use configuration if no JWT auth)
+            let service: AISecureServiceConfig
+            if let payload = payload {
+                service = try AISecureServiceConfig(
+                    provider: payload.provider,
+                    serviceURL: configuration.service.serviceURL,
+                    partialKey: payload.partialKey
+                )
+            } else {
+                service = configuration.service
+            }
+
+            // Get session from JWT payload (no backend call!)
+            let session: AISecureSession
+            if let payload = payload {
+                session = try await sessionManager.getValidSession(
+                    forceRefresh: retriedOnce || jwtRetried,
+                    jwtPayload: payload
+                )
+            } else {
+                // Fallback for legacy auth (no JWT)
+                throw AISecureError.invalidConfiguration("JWT authentication required")
+            }
 
             let bodyData = try JSONSerialization.data(withJSONObject: body)
             let request = requestBuilder.buildRequest(
@@ -204,14 +205,33 @@ import Foundation
         var jwtRetried = false
 
         while true {
-            // 🔑 Get credentials from JWT first (needed for session creation signature)
-            let service = try await getServiceConfig()
+            // 🔑 Get JWT and decode payload
+            let jwt = try await deviceAuthenticator?.getValidJWT()
+            let payload = try jwt?.decodePayload()
 
-            // Pass partialKey to session manager for signature verification
-            let session = try await sessionManager.getValidSession(
-                forceRefresh: retriedOnce,
-                partialKey: service.partialKey
-            )
+            // Get service config from JWT (or use configuration if no JWT auth)
+            let service: AISecureServiceConfig
+            if let payload = payload {
+                service = try AISecureServiceConfig(
+                    provider: payload.provider,
+                    serviceURL: configuration.service.serviceURL,
+                    partialKey: payload.partialKey
+                )
+            } else {
+                service = configuration.service
+            }
+
+            // Get session from JWT payload (no backend call!)
+            let session: AISecureSession
+            if let payload = payload {
+                session = try await sessionManager.getValidSession(
+                    forceRefresh: retriedOnce || jwtRetried,
+                    jwtPayload: payload
+                )
+            } else {
+                // Fallback for legacy auth (no JWT)
+                throw AISecureError.invalidConfiguration("JWT authentication required")
+            }
 
             let bodyData = try JSONSerialization.data(
                 withJSONObject: body,
