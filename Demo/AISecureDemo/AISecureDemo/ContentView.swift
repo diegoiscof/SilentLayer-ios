@@ -25,13 +25,13 @@ struct ContentView: View {
             Text("AISecure Demo")
                 .font(.headline)
 
-            Button("Test OpenAI Direct") {
+            Button("Test OpenAI") {
                 Task {
                     await testOpenAI()
                 }
             }
 
-            Button("Test Anthropic Direct") {
+            Button("Test Anthropic") {
                 Task {
                     await testAnthropic()
                 }
@@ -56,7 +56,7 @@ struct ContentView: View {
                 ],
                 model: "gpt-4o-mini-2024-07-18"
             )
-            print("\(timestamp()) ✅ OpenAI Direct Response:")
+            print("\(timestamp()) ✅ OpenAI Direct:")
             print("Content:", chatResponse.choices.first?.message.content ?? "")
             print("Model:", chatResponse.model)
             print("Tokens:", chatResponse.usage?.totalTokens ?? 0)
@@ -86,7 +86,7 @@ struct ContentView: View {
                 maxTokens: 100
             )
 
-            print("\(timestamp()) ✅ Anthropic Direct Response:")
+            print("\(timestamp()) ✅ Anthropic Response:")
             print("Content:", response.content.first?.text ?? "")
             print("Model:", response.model)
             print("Tokens:", response.usage.inputTokens + response.usage.outputTokens)

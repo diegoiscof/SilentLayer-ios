@@ -30,17 +30,7 @@ public struct AISecureDefaultRequestBuilder: AISecureRequestBuilder, Sendable {
         session: AISecureSession,
         service: AISecureServiceConfig
     ) -> URLRequest {
-        // Build the full URL
-        // For universal routing, endpoint is empty, use serviceURL directly
-        // For direct routing, append endpoint to serviceURL
-        let urlString: String
-        if endpoint.isEmpty {
-            // Universal routing - use service URL as-is
-            urlString = service.serviceURL
-        } else {
-            // Direct routing - append endpoint
-            urlString = service.serviceURL + endpoint
-        }
+        let urlString = service.serviceURL + endpoint
 
         guard let url = URL(string: urlString) else {
             fatalError("Invalid service URL: \(urlString)")
@@ -78,16 +68,7 @@ public struct AISecureDefaultRequestBuilder: AISecureRequestBuilder, Sendable {
         request.setValue(configuration.deviceFingerprint, forHTTPHeaderField: "x-device-fingerprint")
         request.setValue(service.provider, forHTTPHeaderField: "x-provider")
 
-        // 🔴 CRITICAL: endpoint must include leading slash for direct routing
-        // For universal routing, endpoint is empty string ""
-        let normalizedEndpoint: String
-        if endpoint.isEmpty {
-            normalizedEndpoint = "" // Universal routing - no endpoint
-        } else if endpoint.hasPrefix("/") {
-            normalizedEndpoint = endpoint // Already has leading slash
-        } else {
-            normalizedEndpoint = "/" + endpoint // Add leading slash
-        }
+        let normalizedEndpoint = endpoint.hasPrefix("/") ? endpoint : "/" + endpoint
 
         let bodyBase64 = body.base64EncodedString()
         // 🔒 SECURITY: Include provider + serviceId to bind signature to specific service
@@ -106,8 +87,6 @@ public struct AISecureDefaultRequestBuilder: AISecureRequestBuilder, Sendable {
             forHTTPHeaderField: "x-signature"
         )
 
-        // Log request details
-        let logEndpoint = endpoint.isEmpty ? "(universal routing)" : endpoint
-        logIf(.debug)?.debug("➡️ Request to \(logEndpoint)")
+        logIf(.debug)?.debug("➡️ Request to \(endpoint)")
     }
 }
