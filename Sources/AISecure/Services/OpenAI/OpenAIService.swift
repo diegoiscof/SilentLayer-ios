@@ -115,6 +115,73 @@ import Foundation
         )
     }
 
+    /// Generates images using DALL-E
+    ///
+    /// - Parameters:
+    ///   - prompt: A text description of the desired image(s)
+    ///   - model: The model to use (default: "dall-e-3")
+    ///   - n: Number of images to generate (1-10, default: 1)
+    ///   - size: Size of generated images (default: "1024x1024")
+    ///   - quality: Quality of image (default: "standard")
+    ///   - responseFormat: Format of response - "url" or "b64_json" (default: "url")
+    /// - Returns: Image generation response
+    public func generateImage(
+        prompt: String,
+        model: String = "dall-e-3",
+        n: Int = 1,
+        size: String = "1024x1024",
+        quality: String = "standard",
+        responseFormat: String = "url"
+    ) async throws -> OpenAIImageGenerationResponse {
+        guard !prompt.isEmpty else {
+            throw AISecureError.invalidConfiguration("Prompt cannot be empty")
+        }
+        guard (1...10).contains(n) else {
+            throw AISecureError.invalidConfiguration("Number of images must be between 1 and 10")
+        }
+
+        let body: [String: Any] = [
+            "model": model,
+            "prompt": prompt,
+            "n": n,
+            "size": size,
+            "quality": quality,
+            "response_format": responseFormat
+        ]
+
+        return try await jsonRequest(
+            endpoint: "/v1/images/generations",
+            body: body,
+            response: OpenAIImageGenerationResponse.self
+        )
+    }
+
+    /// Moderates text content for harmful content
+    ///
+    /// - Parameters:
+    ///   - input: The text to moderate
+    ///   - model: The model to use (default: "omni-moderation-latest")
+    /// - Returns: Moderation response with flagged categories
+    public func moderateContent(
+        input: String,
+        model: String = "omni-moderation-latest"
+    ) async throws -> OpenAIModerationResponse {
+        guard !input.isEmpty else {
+            throw AISecureError.invalidConfiguration("Input cannot be empty")
+        }
+
+        let body: [String: Any] = [
+            "model": model,
+            "input": input
+        ]
+
+        return try await jsonRequest(
+            endpoint: "/v1/moderations",
+            body: body,
+            response: OpenAIModerationResponse.self
+        )
+    }
+
     // MARK: - Private Methods
 
     private func jsonRequest<T: Decodable>(

@@ -92,42 +92,78 @@ public enum AISecure {
         )
     }
 
-    /// Creates an Anthropic service instance (Legacy - with hardcoded credentials)
+    /// Creates a Gemini service instance
     ///
-    /// ⚠️ DEPRECATED: This method requires hardcoded credentials which can be extracted from your app.
-    /// Use `anthropicService(serviceURL:backendURL:)` instead for JWT-based dynamic credentials.
+    /// 🔒 SECURITY: Credentials are fetched dynamically from backend (no hardcoded keys)
+    ///
+    /// Features:
+    /// - Full Gemini API support (content generation, vision, multi-modal)
+    /// - Model can be specified from SDK or configured in dashboard
+    /// - Raw Gemini response format
+    /// - Dynamic credential issuance via JWT
     ///
     /// - Parameters:
-    ///   - serviceURL: The service gateway URL (format: https://api.gateway.com/anthropic-{serviceId})
-    ///   - partialKey: The partial API key
+    ///   - serviceURL: The service gateway URL (format: https://api.gateway.com/gemini-{serviceId})
     ///   - backendURL: The AISecure backend URL
     ///
-    /// - Returns: An instance of AnthropicService configured and ready to make requests
+    /// - Returns: An instance of GeminiService configured and ready to make requests
     ///
     /// - Throws: AISecureError if the configuration is invalid
-    @available(*, deprecated, message: "Use anthropicService(serviceURL:backendURL:) for JWT-based authentication instead")
     @MainActor
-    public static func anthropicServiceLegacy(
+    public static func geminiService(
         serviceURL: String,
-        partialKey: String,
         backendURL: String
-    ) throws -> AnthropicService {
-        let service = try AISecureServiceConfig(
-            provider: "anthropic",
+    ) throws -> GeminiService {
+        let (configuration, sessionManager, requestBuilder, urlSession, deviceAuth) = try createServiceDependenciesWithJWT(
+            provider: "gemini",
             serviceURL: serviceURL,
-            partialKey: partialKey
-        )
-
-        let (configuration, sessionManager, requestBuilder, urlSession) = try createServiceDependencies(
-            service: service,
             backendURL: backendURL
         )
 
-        return AnthropicService(
+        return GeminiService(
             configuration: configuration,
             sessionManager: sessionManager,
             requestBuilder: requestBuilder,
-            urlSession: urlSession
+            urlSession: urlSession,
+            deviceAuthenticator: deviceAuth
+        )
+    }
+
+    /// Creates a Grok service instance
+    ///
+    /// 🔒 SECURITY: Credentials are fetched dynamically from backend (no hardcoded keys)
+    ///
+    /// Features:
+    /// - OpenAI-compatible API (chat completions)
+    /// - Vision capabilities (grok-vision-beta)
+    /// - Model can be specified from SDK or configured in dashboard
+    /// - Raw OpenAI-compatible response format
+    /// - Dynamic credential issuance via JWT
+    ///
+    /// - Parameters:
+    ///   - serviceURL: The service gateway URL (format: https://api.gateway.com/grok-{serviceId})
+    ///   - backendURL: The AISecure backend URL
+    ///
+    /// - Returns: An instance of GrokService configured and ready to make requests
+    ///
+    /// - Throws: AISecureError if the configuration is invalid
+    @MainActor
+    public static func grokService(
+        serviceURL: String,
+        backendURL: String
+    ) throws -> GrokService {
+        let (configuration, sessionManager, requestBuilder, urlSession, deviceAuth) = try createServiceDependenciesWithJWT(
+            provider: "grok",
+            serviceURL: serviceURL,
+            backendURL: backendURL
+        )
+
+        return GrokService(
+            configuration: configuration,
+            sessionManager: sessionManager,
+            requestBuilder: requestBuilder,
+            urlSession: urlSession,
+            deviceAuthenticator: deviceAuth
         )
     }
 
