@@ -30,8 +30,7 @@ struct ContentView: View {
 
     let providers = ["OpenAI", "Anthropic", "Gemini", "Grok"]
     
-    let backendUrl = "https://relates-treasury-pot-generate.trycloudflare.com"
-    let serviceUrl = "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/openai-aeee3d7ba7217231"
+    let openAIServiceURL = "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/openai-aeee3d7ba7217231"
 
     var openAIEndpoints: [(String, () async -> Void)] {
         [
@@ -155,8 +154,7 @@ struct ContentView: View {
     func testOpenAIChat() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
             let chatResponse = try await openAI.chat(
                 messages: [
@@ -184,8 +182,7 @@ struct ContentView: View {
     func testOpenAIImage() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
             let imageResponse = try await openAI.generateImage(
                 prompt: "A futuristic cityscape at sunset",
@@ -213,8 +210,7 @@ struct ContentView: View {
     func testOpenAIEmbeddings() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
             let embeddingResponse = try await openAI.embeddings(
                 input: ["Hello, how are you?", "I'm doing great!"],
@@ -241,8 +237,7 @@ struct ContentView: View {
     func testOpenAITTS() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
             let audioData = try await openAI.textToSpeech(
                 input: "Hello, this is a test of text to speech.",
@@ -272,8 +267,7 @@ struct ContentView: View {
     func testOpenAIModeration() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
             let modResponse = try await openAI.moderateContent(
                 input: "This is a perfectly safe and friendly message.",
@@ -304,8 +298,7 @@ struct ContentView: View {
     func testOpenAIChatStream() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
 
             output = "\(timestamp()) ⚡ Starting OpenAI Streaming Chat...\n\n"
@@ -354,8 +347,7 @@ struct ContentView: View {
     func testOpenAIStructuredOutput() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
 
             // Define a JSON schema for structured output
@@ -405,8 +397,7 @@ struct ContentView: View {
     func testOpenAIReasoning() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
 
             // Note: reasoning_effort only works with o1/o3 models
@@ -442,8 +433,7 @@ struct ContentView: View {
     func testOpenAIResponse() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
 
             // Note: Responses API with reasoning_effort only works with o1/o3 models
@@ -495,8 +485,7 @@ struct ContentView: View {
     func testOpenAIResponseStream() async {
         do {
             let openAI = try AISecure.openAIService(
-                serviceURL: serviceUrl,
-                backendURL: backendUrl
+                serviceURL: openAIServiceURL
             )
 
             output = "\(timestamp()) ⚡ Starting Responses API Streaming...\n\n"
@@ -555,8 +544,7 @@ struct ContentView: View {
     func testAnthropicMessage() async {
         do {
             let anthropic = try AISecure.anthropicService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/anthropic-c521f42fe6a22781",
-                backendURL: backendUrl
+                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/anthropic-c521f42fe6a22781"
             )
             let response = try await anthropic.createMessage(
                 messages: [.init(role: "user", content: "Say a common italian phrase")],
@@ -583,8 +571,7 @@ struct ContentView: View {
     func testAnthropicMessageStream() async {
         do {
             let anthropic = try AISecure.anthropicService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/anthropic-c521f42fe6a22781",
-                backendURL: backendUrl
+                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/anthropic-c521f42fe6a22781"
             )
 
             output = "\(timestamp()) ⚡ Starting Anthropic Streaming Message...\n\n"
@@ -636,8 +623,7 @@ struct ContentView: View {
     func testGeminiContent() async {
         do {
             let gemini = try AISecure.geminiService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/google-8b2a347a3e03e2de",
-                backendURL: backendUrl
+                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/google-8b2a347a3e03e2de"
             )
             let response = try await gemini.generateContent(
                 prompt: "Write a haiku about programming",
@@ -667,8 +653,7 @@ struct ContentView: View {
     func testGrokChat() async {
         do {
             let grok = try AISecure.grokService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a",
-                backendURL: backendUrl
+                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a"
             )
             let chatResponse = try await grok.chat(
                 messages: [
@@ -697,8 +682,7 @@ struct ContentView: View {
     func testGrokVision() async {
         do {
             let grok = try AISecure.grokService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a",
-                backendURL: backendUrl
+                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a"
             )
             let chatResponse = try await grok.chatWithVision(
                 messages: [
@@ -727,8 +711,7 @@ struct ContentView: View {
     func testGrokChatStream() async {
         do {
             let grok = try AISecure.grokService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a",
-                backendURL: backendUrl
+                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a"
             )
 
             output = "\(timestamp()) ⚡ Starting Grok Streaming Chat...\n\n"

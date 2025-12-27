@@ -2,28 +2,124 @@
 //  AISecure.swift
 //  AISecure
 //
+//  Created by Diego Francisco Oruna Cabrera on 22/12/25.
+//
 
 import Foundation
 
+// MARK: - AISecure SDK
+
+/// AISecure SDK - Secure AI API proxy for iOS applications
+///
+/// AISecure provides a secure way to access AI providers (OpenAI, Anthropic, Google, xAI)
+/// without exposing API keys in your mobile app. Features include:
+///
+/// - **Security**: API keys never leave your server. Requests are authenticated via JWT.
+/// - **Multi-provider**: Single SDK for OpenAI, Anthropic, Gemini, and Grok.
+/// - **Usage tracking**: Monitor API usage per project from your dashboard.
+/// - **Streaming**: Full support for streaming responses.
+///
+/// ## Quick Start
+///
+/// 1. Configure the SDK at app launch (optional):
+/// ```swift
+/// AISecure.configure(logLevel: .error)
+/// ```
+///
+/// 2. Create a service using the Service URL from your dashboard:
+/// ```swift
+/// let openAI = try AISecure.openAIService(
+///     serviceURL: "https://gateway.aisecure.io/openai-abc123"
+/// )
+///
+/// let response = try await openAI.chat(
+///     messages: [.init(role: "user", content: "Hello!")],
+///     model: "gpt-4o-mini"
+/// )
+/// ```
 public enum AISecure {
     
+    /// The current SDK version
     public static let sdkVersion = "2.1.0"
     
     // MARK: - Configuration
     
-    nonisolated public static func configure(logLevel: AISecureLogLevel, timestamps: Bool = false) {
+    /// Production backend URL
+    private static let backendURL = "https://relates-treasury-pot-generate.trycloudflare.com"
+    
+    /// Configures the AISecure SDK logging
+    ///
+    /// Call this once at app startup. This is optional - defaults to `.error` level.
+    ///
+    /// - Parameters:
+    ///   - logLevel: The minimum log level to display (default: `.error`)
+    ///   - timestamps: Whether to include timestamps in logs (default: `false`)
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// // Minimal logging (recommended for production)
+    /// AISecure.configure(logLevel: .error)
+    ///
+    /// // Verbose logging (for debugging)
+    /// AISecure.configure(logLevel: .debug, timestamps: true)
+    /// ```
+    nonisolated public static func configure(
+        logLevel: AISecureLogLevel = .error,
+        timestamps: Bool = false
+    ) {
         AISecureLogLevel.callerDesiredLogLevel = logLevel
         AISecureLogLevel.showTimestamps = timestamps
+        
+        logIf(.info)?.info("AISecure SDK v\(sdkVersion) initialized")
     }
     
     // MARK: - Service Factory
     
+    /// Creates an OpenAI service instance
+    ///
+    /// 🔒 **Security**: Credentials are fetched dynamically from backend via JWT.
+    /// No API keys are stored in your app.
+    ///
+    /// ## Supported Features
+    /// - Chat completions (GPT-4, GPT-4o, etc.)
+    /// - Streaming responses
+    /// - Structured outputs (JSON schema)
+    /// - Reasoning models (o1, o3)
+    /// - Responses API
+    /// - Image generation (DALL-E)
+    /// - Embeddings
+    /// - Text-to-speech
+    /// - Content moderation
+    ///
+    /// - Parameter serviceURL: The Service URL from your AISecure dashboard
+    /// - Returns: An instance of `OpenAIService` ready to make requests
+    /// - Throws: `AISecureError.invalidConfiguration` if the URL is invalid
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let openAI = try AISecure.openAIService(
+    ///     serviceURL: "https://gateway.aisecure.io/openai-abc123"
+    /// )
+    ///
+    /// // Non-streaming
+    /// let response = try await openAI.chat(
+    ///     messages: [.init(role: "user", content: "Hello!")],
+    ///     model: "gpt-4o-mini"
+    /// )
+    ///
+    /// // Streaming
+    /// try await openAI.chatStream(
+    ///     messages: [.init(role: "user", content: "Tell me a story")],
+    ///     model: "gpt-4o-mini"
+    /// ) { delta in
+    ///     print(delta.choices.first?.delta.content ?? "", terminator: "")
+    /// }
+    /// ```
     @MainActor
-    public static func openAIService(
-        serviceURL: String,
-        backendURL: String
-    ) throws -> OpenAIService {
-        let deps = try createDependencies(serviceURL: serviceURL, backendURL: backendURL)
+    public static func openAIService(serviceURL: String) throws -> OpenAIService {
+        let deps = try createDependencies(serviceURL: serviceURL)
         return OpenAIService(
             configuration: deps.configuration,
             requestBuilder: deps.requestBuilder,
@@ -32,12 +128,37 @@ public enum AISecure {
         )
     }
     
+    /// Creates an Anthropic service instance
+    ///
+    /// 🔒 **Security**: Credentials are fetched dynamically from backend via JWT.
+    /// No API keys are stored in your app.
+    ///
+    /// ## Supported Features
+    /// - Messages API (Claude 3.5, Claude 3, etc.)
+    /// - Streaming responses
+    /// - Vision (image inputs)
+    /// - Extended thinking
+    ///
+    /// - Parameter serviceURL: The Service URL from your AISecure dashboard
+    /// - Returns: An instance of `AnthropicService` ready to make requests
+    /// - Throws: `AISecureError.invalidConfiguration` if the URL is invalid
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let anthropic = try AISecure.anthropicService(
+    ///     serviceURL: "https://gateway.aisecure.io/anthropic-abc123"
+    /// )
+    ///
+    /// let response = try await anthropic.createMessage(
+    ///     messages: [.init(role: "user", content: "Hello!")],
+    ///     maxTokens: 1024
+    /// )
+    /// print(response.content.first?.text ?? "")
+    /// ```
     @MainActor
-    public static func anthropicService(
-        serviceURL: String,
-        backendURL: String
-    ) throws -> AnthropicService {
-        let deps = try createDependencies(serviceURL: serviceURL, backendURL: backendURL)
+    public static func anthropicService(serviceURL: String) throws -> AnthropicService {
+        let deps = try createDependencies(serviceURL: serviceURL)
         return AnthropicService(
             configuration: deps.configuration,
             requestBuilder: deps.requestBuilder,
@@ -46,12 +167,37 @@ public enum AISecure {
         )
     }
     
+    /// Creates a Gemini service instance
+    ///
+    /// 🔒 **Security**: Credentials are fetched dynamically from backend via JWT.
+    /// No API keys are stored in your app.
+    ///
+    /// ## Supported Features
+    /// - Content generation (Gemini Pro, Gemini Flash, etc.)
+    /// - Streaming responses
+    /// - Multi-modal inputs (text + images)
+    /// - Safety settings
+    ///
+    /// - Parameter serviceURL: The Service URL from your AISecure dashboard
+    /// - Returns: An instance of `GeminiService` ready to make requests
+    /// - Throws: `AISecureError.invalidConfiguration` if the URL is invalid
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let gemini = try AISecure.geminiService(
+    ///     serviceURL: "https://gateway.aisecure.io/google-abc123"
+    /// )
+    ///
+    /// let response = try await gemini.generateContent(
+    ///     prompt: "Write a haiku about Swift",
+    ///     model: "gemini-2.0-flash-exp"
+    /// )
+    /// print(response.candidates?.first?.content?.parts.first?.text ?? "")
+    /// ```
     @MainActor
-    public static func geminiService(
-        serviceURL: String,
-        backendURL: String
-    ) throws -> GeminiService {
-        let deps = try createDependencies(serviceURL: serviceURL, backendURL: backendURL)
+    public static func geminiService(serviceURL: String) throws -> GeminiService {
+        let deps = try createDependencies(serviceURL: serviceURL)
         return GeminiService(
             configuration: deps.configuration,
             requestBuilder: deps.requestBuilder,
@@ -60,12 +206,37 @@ public enum AISecure {
         )
     }
     
+    /// Creates a Grok service instance
+    ///
+    /// 🔒 **Security**: Credentials are fetched dynamically from backend via JWT.
+    /// No API keys are stored in your app.
+    ///
+    /// ## Supported Features
+    /// - Chat completions (OpenAI-compatible API)
+    /// - Streaming responses
+    /// - Vision capabilities
+    /// - Reasoning models
+    ///
+    /// - Parameter serviceURL: The Service URL from your AISecure dashboard
+    /// - Returns: An instance of `GrokService` ready to make requests
+    /// - Throws: `AISecureError.invalidConfiguration` if the URL is invalid
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let grok = try AISecure.grokService(
+    ///     serviceURL: "https://gateway.aisecure.io/grok-abc123"
+    /// )
+    ///
+    /// let response = try await grok.chat(
+    ///     messages: [.init(role: "user", content: "Hello!")],
+    ///     model: "grok-2-latest"
+    /// )
+    /// print(response.choices.first?.message.content ?? "")
+    /// ```
     @MainActor
-    public static func grokService(
-        serviceURL: String,
-        backendURL: String
-    ) throws -> GrokService {
-        let deps = try createDependencies(serviceURL: serviceURL, backendURL: backendURL)
+    public static func grokService(serviceURL: String) throws -> GrokService {
+        let deps = try createDependencies(serviceURL: serviceURL)
         return GrokService(
             configuration: deps.configuration,
             requestBuilder: deps.requestBuilder,
@@ -84,12 +255,9 @@ public enum AISecure {
     }
     
     @MainActor
-    private static func createDependencies(
-        serviceURL: String,
-        backendURL: String
-    ) throws -> ServiceDependencies {
+    private static func createDependencies(serviceURL: String) throws -> ServiceDependencies {
         guard let backendURLParsed = URL(string: backendURL) else {
-            throw AISecureError.invalidConfiguration("Invalid backend URL: \(backendURL)")
+            throw AISecureError.invalidConfiguration("Invalid backend URL")
         }
         
         let deviceFingerprint = DeviceIdentifier.get()
