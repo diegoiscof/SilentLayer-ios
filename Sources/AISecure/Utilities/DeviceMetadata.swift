@@ -11,43 +11,106 @@ import Foundation
 import UIKit
 #endif
 
-public struct DeviceMetadata {
+/// Device and app metadata for debugging and analytics
+///
+/// This metadata can be sent with requests for server-side logging,
+/// debugging, or analytics purposes.
+public struct DeviceMetadata: Sendable {
+    
+    /// Bundle identifier of the host app
+    public let bundleID: String
+    
+    /// Version of the host app
+    public let appVersion: String
+    
+    /// Version of the AISecure SDK
+    public let sdkVersion: String
+    
+    /// Operating system name (iOS, macOS, etc.)
+    public let systemName: String
+    
+    /// Operating system version
+    public let osVersion: String
+    
+    /// Device model (iPhone, iPad, Mac, etc.)
+    public let deviceModel: String
+    
+    /// Timestamp when metadata was captured
+    public let timestamp: Date
+    
+    // MARK: - Initialization
+    
+    /// Creates metadata with current device/app information
     @MainActor
-    static func generateMetadataString(partialKey: String) -> String {
-        let version = "1"
-        let timestamp = String(Int(Date().timeIntervalSince1970))
-
+    public static func current() -> DeviceMetadata {
         #if canImport(UIKit)
-        let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
-        let systemName = UIDevice.current.systemName
-        let osVersion = UIDevice.current.systemVersion
-        let deviceModel = UIDevice.current.model
+        return DeviceMetadata(
+            bundleID: Bundle.main.bundleIdentifier ?? "unknown",
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+            sdkVersion: AISecure.sdkVersion,
+            systemName: UIDevice.current.systemName,
+            osVersion: UIDevice.current.systemVersion,
+            deviceModel: UIDevice.current.model,
+            timestamp: Date()
+        )
         #else
-        let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
-        let systemName = "macOS"
-        let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
-        let deviceModel = "Mac"
+        return DeviceMetadata(
+            bundleID: Bundle.main.bundleIdentifier ?? "unknown",
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+            sdkVersion: AISecure.sdkVersion,
+            systemName: "macOS",
+            osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            deviceModel: "Mac",
+            timestamp: Date()
+        )
         #endif
-
-        let sdkVersion = AISecure.sdkVersion
-        let bodySize = "0" // Can be populated with actual request body size if needed
-
-        // Format: version|bundleID|appVersion|sdkVersion|timestamp|systemName|osVersion|deviceModel|bodySize|partialKey
+    }
+    
+    // MARK: - Serialization
+    
+    /// Returns metadata as a dictionary for JSON serialization
+    public var dictionary: [String: String] {
+        [
+            "bundle_id": bundleID,
+            "app_version": appVersion,
+            "sdk_version": sdkVersion,
+            "system_name": systemName,
+            "os_version": osVersion,
+            "device_model": deviceModel,
+            "timestamp": ISO8601DateFormatter().string(from: timestamp)
+        ]
+    }
+    
+    /// Returns metadata as a pipe-separated string (legacy format)
+    ///
+    /// Format: `version|bundleID|appVersion|sdkVersion|timestamp|systemName|osVersion|deviceModel`
+    public var legacyString: String {
         let components = [
-            version,
+            "1", // format version
             bundleID,
             appVersion,
             sdkVersion,
-            timestamp,
+            String(Int(timestamp.timeIntervalSince1970)),
             systemName,
             osVersion,
-            deviceModel,
-            bodySize,
-            partialKey
+            deviceModel
         ]
-
         return components.joined(separator: "|")
     }
+    
+    /// Returns metadata as an HTTP header value
+    public var headerValue: String {
+        // Base64 encode the JSON for safe header transmission
+        guard let data = try? JSONSerialization.data(withJSONObject: dictionary),
+              let base64 = data.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlSafe) else {
+            return legacyString
+        }
+        return base64
+    }
+}
+
+// MARK: - CharacterSet Extension
+
+private extension CharacterSet {
+    static let urlSafe = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 }

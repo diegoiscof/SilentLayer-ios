@@ -4,124 +4,159 @@
 //
 //  Created by Diego Francisco Oruna Cabrera on 22/12/25.
 //
-//  Usage:
-//    // Enable debug logging
-//    AISecureLogLevel.callerDesiredLogLevel = .debug
-//
-//    // Enable timestamps for performance measurement
-//    AISecureLogLevel.showTimestamps = true
-//
-//  Example output with timestamps:
-//    [14:32:45.123] 🔄 Authenticating device with backend
-//    [14:32:45.456] ✅ Device authenticated, JWT expires at 1766532884197
-//    [14:32:45.489] ➡️ Request to /v1/chat/completions
-//
 
 import OSLog
 
-public enum AISecureLogLevel: Int, Sendable {
-    case debug
-    case info
-    case warning
-    case error
-    case critical
+// MARK: - Log Level
 
-    func isAtOrAboveThresholdLevel(_ threshold: AISecureLogLevel) -> Bool {
-        return self.rawValue >= threshold.rawValue
-    }
-
-    nonisolated(unsafe) static var _callerDesiredLogLevel = AISecureLogLevel.warning
-    static var callerDesiredLogLevel: AISecureLogLevel {
-        get {
-            ProtectedPropertyQueue.logLevel.sync { self._callerDesiredLogLevel }
-        }
-        set {
-            ProtectedPropertyQueue.logLevel.async(flags: .barrier) { self._callerDesiredLogLevel = newValue }
-        }
-    }
-
-    nonisolated(unsafe) static var _showTimestamps = false
-    public static var showTimestamps: Bool {
-        get {
-            ProtectedPropertyQueue.logLevel.sync { self._showTimestamps }
-        }
-        set {
-            ProtectedPropertyQueue.logLevel.async(flags: .barrier) { self._showTimestamps = newValue }
-        }
+/// Log levels for AISecure SDK
+///
+/// Set the desired log level via `AISecure.configure(logLevel:)`.
+/// Only messages at or above the configured level will be displayed.
+public enum AISecureLogLevel: Int, Comparable, Sendable {
+    /// Detailed debugging information
+    case debug = 0
+    /// General informational messages
+    case info = 1
+    /// Potential issues that aren't errors
+    case warning = 2
+    /// Errors that don't prevent operation
+    case error = 3
+    /// Critical failures
+    case critical = 4
+    /// No logging
+    case none = 5
+    
+    public static func < (lhs: AISecureLogLevel, rhs: AISecureLogLevel) -> Bool {
+        lhs.rawValue < rhs.rawValue
     }
 }
 
-internal let aisecureLogger = Logger(
-    subsystem: Bundle.main.bundleIdentifier ?? "UnknownApp",
+// MARK: - Thread-Safe Configuration
+
+/// Thread-safe storage for logger configuration
+private final class LoggerConfiguration: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "com.aisecure.logger.config", attributes: .concurrent)
+    
+    private var _logLevel: AISecureLogLevel = .warning
+    private var _showTimestamps: Bool = false
+    
+    var logLevel: AISecureLogLevel {
+        get { queue.sync { _logLevel } }
+        set { queue.async(flags: .barrier) { self._logLevel = newValue } }
+    }
+    
+    var showTimestamps: Bool {
+        get { queue.sync { _showTimestamps } }
+        set { queue.async(flags: .barrier) { self._showTimestamps = newValue } }
+    }
+}
+
+private let loggerConfig = LoggerConfiguration()
+
+// MARK: - Public Configuration Access
+
+extension AISecureLogLevel {
+    /// The current log level threshold
+    public static var callerDesiredLogLevel: AISecureLogLevel {
+        get { loggerConfig.logLevel }
+        set { loggerConfig.logLevel = newValue }
+    }
+    
+    /// Whether to include timestamps in log output
+    public static var showTimestamps: Bool {
+        get { loggerConfig.showTimestamps }
+        set { loggerConfig.showTimestamps = newValue }
+    }
+}
+
+// MARK: - Logger Implementation
+
+/// The underlying OSLog logger
+private let aisecureLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.aisecure.sdk",
     category: "AISecure"
 )
 
-// Timestamp formatter for high-precision logging
-private let timestampFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm:ss"
-    return formatter
-}()
-
-// Custom logger wrapper that adds timestamps when enabled
+/// Custom logger that adds optional timestamps and respects log level filtering
 internal struct AISecureTimestampLogger {
     private let logger: Logger
-    private let logLevel: AISecureLogLevel
-
-    init(logger: Logger, logLevel: AISecureLogLevel) {
+    
+    init(logger: Logger) {
         self.logger = logger
-        self.logLevel = logLevel
     }
-
-    func debug(_ message: String) {
-        log(message, level: .debug)
+    
+    func debug(_ message: @autoclosure () -> String) {
+        log(message(), level: .debug)
     }
-
-    func info(_ message: String) {
-        log(message, level: .info)
+    
+    func info(_ message: @autoclosure () -> String) {
+        log(message(), level: .info)
     }
-
-    func warning(_ message: String) {
-        log(message, level: .warning)
+    
+    func warning(_ message: @autoclosure () -> String) {
+        log(message(), level: .warning)
     }
-
-    func error(_ message: String) {
-        log(message, level: .error)
+    
+    func error(_ message: @autoclosure () -> String) {
+        log(message(), level: .error)
     }
-
-    func critical(_ message: String) {
-        log(message, level: .critical)
+    
+    func critical(_ message: @autoclosure () -> String) {
+        log(message(), level: .critical)
     }
-
+    
     private func log(_ message: String, level: AISecureLogLevel) {
-        let finalMessage: String
-        if AISecureLogLevel.showTimestamps {
-            let now = Date()
-            let timestamp = timestampFormatter.string(from: now)
-            let milliseconds = Int(now.timeIntervalSince1970 * 1000) % 1000
-            finalMessage = "[\(timestamp).\(String(format: "%03d", milliseconds))] \(message)"
-        } else {
-            finalMessage = message
-        }
-
+        let finalMessage = AISecureLogLevel.showTimestamps
+            ? "[\(Self.timestamp)] \(message)"
+            : message
+        
         switch level {
         case .debug:
-            logger.debug("\(finalMessage)")
+            logger.debug("\(finalMessage, privacy: .public)")
         case .info:
-            logger.info("\(finalMessage)")
+            logger.info("\(finalMessage, privacy: .public)")
         case .warning:
-            logger.warning("\(finalMessage)")
+            logger.warning("\(finalMessage, privacy: .public)")
         case .error:
-            logger.error("\(finalMessage)")
+            logger.error("\(finalMessage, privacy: .public)")
         case .critical:
-            logger.critical("\(finalMessage)")
+            logger.critical("\(finalMessage, privacy: .public)")
+        case .none:
+            break
         }
+    }
+    
+    /// High-precision timestamp string (HH:mm:ss.SSS)
+    private static var timestamp: String {
+        let now = Date()
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.hour, .minute, .second], from: now)
+        let milliseconds = Int(now.timeIntervalSince1970 * 1000) % 1000
+        
+        return String(
+            format: "%02d:%02d:%02d.%03d",
+            components.hour ?? 0,
+            components.minute ?? 0,
+            components.second ?? 0,
+            milliseconds
+        )
     }
 }
 
+// MARK: - Log Function
+
+/// Returns a logger if the specified level meets the threshold, nil otherwise
+///
+/// Usage:
+/// ```swift
+/// logIf(.debug)?.debug("Detailed info")
+/// logIf(.error)?.error("Something went wrong")
+/// ```
 @inline(__always)
 internal func logIf(_ logLevel: AISecureLogLevel) -> AISecureTimestampLogger? {
-    return logLevel.isAtOrAboveThresholdLevel(AISecureLogLevel.callerDesiredLogLevel)
-        ? AISecureTimestampLogger(logger: aisecureLogger, logLevel: logLevel)
-        : nil
+    guard logLevel >= AISecureLogLevel.callerDesiredLogLevel else {
+        return nil
+    }
+    return AISecureTimestampLogger(logger: aisecureLogger)
 }
