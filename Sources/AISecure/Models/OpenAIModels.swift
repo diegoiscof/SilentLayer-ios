@@ -226,3 +226,174 @@ public struct OpenAIModerationResponse: Codable, Sendable {
         }
     }
 }
+
+// MARK: - Responses API
+
+/// Streaming event from OpenAI's Responses API
+/// The Responses API uses event-based SSE format with event names
+public struct OpenAIResponseStreamEvent: Codable, Sendable {
+    public let type: String
+    public let sequenceNumber: Int?
+    public let response: OpenAIResponseObject?
+    public let outputIndex: Int?
+    public let contentIndex: Int?
+    public let itemId: String?
+    public let delta: String?
+    public let text: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case sequenceNumber = "sequence_number"
+        case response
+        case outputIndex = "output_index"
+        case contentIndex = "content_index"
+        case itemId = "item_id"
+        case delta
+        case text
+    }
+}
+
+/// Response from OpenAI's Responses API
+/// This is OpenAI's most advanced interface for generating model responses
+public struct OpenAIResponseObject: Codable, Sendable {
+    public let id: String?
+    public let createdAt: Double?
+    public let model: String?
+    public let output: [ResponseOutputItem]?
+    public let status: Status?
+    public let usage: ResponseUsage?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case createdAt = "created_at"
+        case model
+        case output
+        case status
+        case usage
+    }
+
+    public enum Status: String, Codable, Sendable {
+        case completed
+        case failed
+        case incomplete
+        case inProgress = "in_progress"
+    }
+
+    public struct ResponseUsage: Codable, Sendable {
+        public let inputTokens: Int?
+        public let outputTokens: Int?
+        public let totalTokens: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+            case totalTokens = "total_tokens"
+        }
+    }
+
+    public enum ResponseOutputItem: Codable, Sendable {
+        case message(ResponseOutputMessage)
+        case reasoning(ReasoningOutput)
+
+        enum CodingKeys: String, CodingKey {
+            case type
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let type = try container.decode(String.self, forKey: .type)
+
+            switch type {
+            case "message":
+                self = .message(try ResponseOutputMessage(from: decoder))
+            case "reasoning":
+                self = .reasoning(try ReasoningOutput(from: decoder))
+            default:
+                throw DecodingError.dataCorruptedError(
+                    forKey: .type,
+                    in: container,
+                    debugDescription: "Unknown output item type: \(type)"
+                )
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            switch self {
+            case .message(let msg):
+                try msg.encode(to: encoder)
+            case .reasoning(let reasoning):
+                try reasoning.encode(to: encoder)
+            }
+        }
+    }
+
+    public struct ResponseOutputMessage: Codable, Sendable {
+        public let content: [Content]
+        public let role: String?
+
+        public enum Content: Codable, Sendable {
+            case outputText(String)
+            case refusal(String)
+
+            enum CodingKeys: String, CodingKey {
+                case type, text, refusal
+            }
+
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let type = try container.decode(String.self, forKey: .type)
+
+                switch type {
+                case "output_text":
+                    let text = try container.decode(String.self, forKey: .text)
+                    self = .outputText(text)
+                case "refusal":
+                    let refusal = try container.decode(String.self, forKey: .refusal)
+                    self = .refusal(refusal)
+                default:
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .type,
+                        in: container,
+                        debugDescription: "Unknown content type: \(type)"
+                    )
+                }
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                switch self {
+                case .outputText(let text):
+                    try container.encode("output_text", forKey: .type)
+                    try container.encode(text, forKey: .text)
+                case .refusal(let refusal):
+                    try container.encode("refusal", forKey: .type)
+                    try container.encode(refusal, forKey: .refusal)
+                }
+            }
+        }
+    }
+
+    public struct ReasoningOutput: Codable, Sendable {
+        public let id: String?
+
+        enum CodingKeys: String, CodingKey {
+            case type, id
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.id = try container.decodeIfPresent(String.self, forKey: .id)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("reasoning", forKey: .type)
+            try container.encodeIfPresent(id, forKey: .id)
+        }
+    }
+}
+
+// MARK: - Image Editing
+
+/// Response from image editing endpoint
+public typealias OpenAIImageEditResponse = OpenAIImageGenerationResponse

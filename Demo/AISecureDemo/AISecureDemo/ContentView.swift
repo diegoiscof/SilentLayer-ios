@@ -30,13 +30,17 @@ struct ContentView: View {
 
     let providers = ["OpenAI", "Anthropic", "Gemini", "Grok"]
     
-    let backendUrl = "https://seeker-exceptions-essex-spy.trycloudflare.com"
+    let backendUrl = "https://relates-treasury-pot-generate.trycloudflare.com"
     let serviceUrl = "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/openai-aeee3d7ba7217231"
 
     var openAIEndpoints: [(String, () async -> Void)] {
         [
             ("Chat Completion", testOpenAIChat),
             ("Chat Completion (Streaming)", testOpenAIChatStream),
+            ("Chat with Structured Output", testOpenAIStructuredOutput),
+            ("Chat with Reasoning (o1/o3)", testOpenAIReasoning),
+            ("Responses API", testOpenAIResponse),
+            ("Responses API (Streaming)", testOpenAIResponseStream),
             ("Image Generation (DALL-E)", testOpenAIImage),
             ("Embeddings", testOpenAIEmbeddings),
             ("Text-to-Speech", testOpenAITTS),
@@ -336,6 +340,205 @@ struct ContentView: View {
             \(fullResponse)
 
             Model: gpt-4o-mini-2024-07-18
+            """
+            output = finalOutput
+            print(finalOutput)
+        } catch {
+            let error = "\(timestamp()) ❌ Error: \(error)"
+            output = error
+            print(error)
+        }
+    }
+
+    @MainActor
+    func testOpenAIStructuredOutput() async {
+        do {
+            let openAI = try AISecure.openAIService(
+                serviceURL: serviceUrl,
+                backendURL: backendUrl
+            )
+
+            // Define a JSON schema for structured output
+            let schema: [String: Any] = [
+                "type": "object",
+                "properties": [
+                    "name": ["type": "string"],
+                    "age": ["type": "number"],
+                    "occupation": ["type": "string"],
+                    "skills": [
+                        "type": "array",
+                        "items": ["type": "string"]
+                    ]
+                ],
+                "required": ["name", "age", "occupation", "skills"],
+                "additionalProperties": false
+            ]
+
+            let chatResponse = try await openAI.chat(
+                messages: [
+                    .init(role: "user", content: "Create a fictional software engineer profile")
+                ],
+                model: "gpt-4o-mini-2024-07-18",
+                responseFormat: .jsonSchema(name: "engineer_profile", schema: schema, strict: true)
+            )
+
+            let result = """
+            \(timestamp()) ✅ Structured Output Success
+
+            JSON Response:
+            \(chatResponse.choices.first?.message.content ?? "")
+
+            Model: \(chatResponse.model)
+            Tokens: \(chatResponse.usage?.totalTokens ?? 0)
+            Response Format: JSON Schema (strict)
+            """
+            output = result
+            print(result)
+        } catch {
+            let error = "\(timestamp()) ❌ Error: \(error)"
+            output = error
+            print(error)
+        }
+    }
+
+    @MainActor
+    func testOpenAIReasoning() async {
+        do {
+            let openAI = try AISecure.openAIService(
+                serviceURL: serviceUrl,
+                backendURL: backendUrl
+            )
+
+            // Note: reasoning_effort only works with o1/o3 models
+            let chatResponse = try await openAI.chat(
+                messages: [
+                    .init(role: "user", content: "Solve: If a train travels 120 miles in 2 hours, how long will it take to travel 300 miles at the same speed?")
+                ],
+                model: "o1-2024-12-17",
+                reasoningEffort: .high  // Only use with o1/o3 models
+            )
+
+            let result = """
+            \(timestamp()) ✅ Chat Success (Reasoning Problem)
+
+            Response:
+            \(chatResponse.choices.first?.message.content ?? "")
+
+            Model: \(chatResponse.model)
+            Tokens: \(chatResponse.usage?.totalTokens ?? 0)
+
+            Note: To use reasoning_effort parameter, use o1 or o3 models.
+            """
+            output = result
+            print(result)
+        } catch {
+            let error = "\(timestamp()) ❌ Error: \(error)"
+            output = error
+            print(error)
+        }
+    }
+
+    @MainActor
+    func testOpenAIResponse() async {
+        do {
+            let openAI = try AISecure.openAIService(
+                serviceURL: serviceUrl,
+                backendURL: backendUrl
+            )
+
+            // Note: Responses API with reasoning_effort only works with o1/o3 models
+            // For this demo, we'll use gpt-4o-mini without reasoning_effort
+            let response = try await openAI.createResponse(
+                input: "Explain what makes Swift a great programming language in 2 sentences",
+                model: "gpt-4o-mini-2024-07-18"
+                // reasoningEffort: .medium  // Only use with o1/o3 models
+            )
+
+            // Extract text from output
+            var outputText = ""
+            if let output = response.output {
+                for item in output {
+                    if case .message(let msg) = item {
+                        for content in msg.content {
+                            if case .outputText(let text) = content {
+                                outputText += text
+                            }
+                        }
+                    }
+                }
+            }
+
+            let result = """
+            \(timestamp()) ✅ Responses API Success
+
+            Response:
+            \(outputText)
+
+            Model: \(response.model ?? "N/A")
+            Status: \(response.status?.rawValue ?? "N/A")
+            Input Tokens: \(response.usage?.inputTokens ?? 0)
+            Output Tokens: \(response.usage?.outputTokens ?? 0)
+            Total Tokens: \(response.usage?.totalTokens ?? 0)
+
+            Note: To use reasoning_effort, use o1 or o3 models.
+            """
+            output = result
+            print(result)
+        } catch {
+            let error = "\(timestamp()) ❌ Error: \(error)"
+            output = error
+            print(error)
+        }
+    }
+
+    @MainActor
+    func testOpenAIResponseStream() async {
+        do {
+            let openAI = try AISecure.openAIService(
+                serviceURL: serviceUrl,
+                backendURL: backendUrl
+            )
+
+            output = "\(timestamp()) ⚡ Starting Responses API Streaming...\n\n"
+            var fullResponse = ""
+
+            // Note: reasoning_effort only works with o1/o3 models
+            try await openAI.createResponseStream(
+                input: "List 5 benefits of using AI in software development",
+                model: "gpt-4o-mini-2024-07-18"
+                // reasoningEffort: .low  // Only use with o1/o3 models
+            ) { event in
+                Task { @MainActor in
+                    // Handle different event types from the Responses API
+                    switch event.type {
+                    case "response.output_text.delta":
+                        // Extract text delta from streaming event
+                        if let delta = event.delta {
+                            fullResponse += delta
+                            self.output = """
+                            \(timestamp()) ⚡ Streaming...
+
+                            \(fullResponse)
+                            """
+                        }
+                    case "response.completed":
+                        self.output += "\n\n\(timestamp()) ✅ Stream Complete!"
+                    default:
+                        // Ignore other event types (response.created, response.in_progress, etc.)
+                        break
+                    }
+                }
+            }
+
+            let finalOutput = """
+            \(timestamp()) ✅ Responses API Stream Success
+
+            Full Response:
+            \(fullResponse)
+
+            Model: gpt-4o-mini-2024-07-18
+
+            Note: To use reasoning_effort, use o1 or o3 models.
             """
             output = finalOutput
             print(finalOutput)
