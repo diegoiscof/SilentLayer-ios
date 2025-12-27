@@ -96,7 +96,7 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
-            .onChange(of: selectedProvider) { _ in
+            .onChange(of: selectedProvider) {
                 selectedEndpoint = 0
                 output = ""
             }

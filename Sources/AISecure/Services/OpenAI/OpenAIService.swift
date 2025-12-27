@@ -509,7 +509,7 @@ import Foundation
 // MARK: - Supporting Types
 
 /// Response format for structured outputs with JSON schema
-public enum ResponseFormat {
+public enum ResponseFormat: @unchecked Sendable {
     case jsonObject
     case jsonSchema(name: String, schema: [String: Any], strict: Bool)
     case text
@@ -534,7 +534,7 @@ public enum ResponseFormat {
 }
 
 /// Reasoning effort for o1/o3 models
-public enum ReasoningEffort: String {
+public enum ReasoningEffort: String, Sendable {
     case none = "none"
     case minimal = "minimal"
     case low = "low"
