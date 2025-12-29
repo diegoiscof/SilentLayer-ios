@@ -30,7 +30,7 @@ struct ContentView: View {
 
     let providers = ["OpenAI", "Anthropic", "Gemini", "Grok"]
     
-    let openAIServiceURL = "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/openai-aeee3d7ba7217231"
+    let openAIServiceURL = "https://gateway.silentlayer.ai/openai-89d78484377bd859"
 
     var openAIEndpoints: [(String, () async -> Void)] {
         [
@@ -149,7 +149,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - OpenAI Tests
+    // MARK: - OpenAI tests with rate limit error examples
     @MainActor
     func testOpenAIChat() async {
         do {
@@ -171,6 +171,16 @@ struct ContentView: View {
             """
             output = result
             print(result)
+        } catch let error as SilentLayerError {
+            switch error {
+            case .userRateLimited(let info):
+                let message = formatRateLimitMessage(info)
+                output = "⏳ \(message)"
+            case .planQuotaExceeded(let info):
+                output = "📊 Service quota reached. Resets in \(formatDuration(info.retryAfter))."
+            default:
+                output = "❌ \(error.localizedDescription)"
+            }
         } catch {
             let error = "\(timestamp()) Error: \(error)"
             output = error
@@ -754,6 +764,29 @@ struct ContentView: View {
             let error = "\(timestamp()) ❌ Error: \(error)"
             output = error
             print(error)
+        }
+    }
+    
+    func formatRateLimitMessage(_ info: SilentLayerRateLimitInfo) -> String {
+        var message = "Rate limit reached."
+        if let used = info.used, let limit = info.limit {
+            message += " (\(used)/\(limit)"
+            if let period = info.period {
+                message += " \(period)"
+            }
+            message += ")"
+        }
+        message += " Try again in \(formatDuration(info.retryAfter))."
+        return message
+    }
+
+    func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 {
+            return "\(seconds)s"
+        } else if seconds < 3600 {
+            return "\(seconds / 60)m \(seconds % 60)s"
+        } else {
+            return "\(seconds / 3600)h \(seconds % 3600 / 60)m"
         }
     }
 }

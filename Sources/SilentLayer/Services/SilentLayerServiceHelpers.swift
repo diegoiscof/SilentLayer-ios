@@ -7,6 +7,12 @@
 
 import Foundation
 
+/// Tracks retry attempts for credential refresh
+private enum RetryState {
+    case initial
+    case retriedWithFreshCredentials
+}
+
 @SilentLayerActor
 internal struct SilentLayerServiceHelpers {
     
@@ -57,45 +63,70 @@ internal struct SilentLayerServiceHelpers {
     
     // MARK: - Public API
     
-    /// Execute request with automatic credential refresh on 401
-    static func executeWithRetry<T: Sendable>(
-        deviceAuthenticator: SilentLayerDeviceAuthenticator?,
+    /// Execute a request with automatic credential refresh on 401
+    ///
+    /// Flow:
+    /// 1. Get credentials (cached if valid)
+    /// 2. Execute request
+    /// 3. On 401 with recoverable code → refresh credentials and retry once
+    /// 4. On unrecoverable error → throw immediately (no retry)
+    ///
+    /// - Parameters:
+    ///   - deviceAuthenticator: The authenticator for credential management
+    ///   - configuration: Service configuration
+    ///   - operation: The async operation to execute with credentials
+    /// - Returns: The operation result (Data, URLResponse)
+    @discardableResult
+    public static func executeWithRetry(
+        deviceAuthenticator: SilentLayerDeviceAuthenticator,
         configuration: SilentLayerConfiguration,
-        makeRequest: @Sendable (SilentLayerServiceConfig, SilentLayerSession) async throws -> (T, URLResponse)
-    ) async throws -> (T, URLResponse) {
+        operation: @Sendable (_ service: SilentLayerServiceConfig, _ session: SilentLayerSession) async throws -> (Data, URLResponse)
+    ) async throws -> (Data, URLResponse) {
         var state = RetryState.initial
         
         while true {
-            // Get credentials (cached or fresh)
-            let credentials = try await resolveCredentials(
-                deviceAuthenticator: deviceAuthenticator,
-                forceRefresh: state.shouldForceRefresh
-            )
+            // Get credentials (force refresh if retrying)
+            let forceRefresh = state == .retriedWithFreshCredentials
+            let credentials: SilentLayerCredentials
             
             do {
-                let (data, response) = try await makeRequest(credentials.service, credentials.session)
-                
-                // Check for 401 in HTTP response
-                if let http = response as? HTTPURLResponse, http.statusCode == 401 {
-                    let errorCode = extractErrorCode(from: data)
-                    if state.handleAuthFailure(authenticator: deviceAuthenticator, errorCode: errorCode) {
-                        continue
-                    }
-                    throw SilentLayerError.httpError(
-                        status: 401,
-                        body: HTTPErrorBody(code: errorCode, message: "Authentication failed", raw: nil)
-                    )
-                }
-                
-                return (data, response)
+                credentials = try await deviceAuthenticator.getCredentials(forceRefresh: forceRefresh)
+            } catch {
+                logIf(.error)?.error("❌ Failed to get credentials: \(error.localizedDescription)")
+                throw error
+            }
+            
+            do {
+                // Execute the operation
+                let result = try await operation(credentials.service, credentials.session)
+                return result
                 
             } catch let error as SilentLayerError {
-                // Check for 401 in thrown error (streaming path)
-                if case .httpError(let status, let body) = error, status == 401 {
-                    if state.handleAuthFailure(authenticator: deviceAuthenticator, errorCode: body.code) {
-                        continue
-                    }
+                // Check if error is unrecoverable (don't retry)
+                if error.isUnrecoverable {
+                    logIf(.error)?.error("Unrecoverable error: \(error.localizedDescription)")
+                    throw error
                 }
+                
+                // Check if we should refresh credentials and retry
+                if error.shouldRefreshCredentials && state == .initial {
+                    logIf(.info)?.info("Session expired, refreshing credentials...")
+                    await deviceAuthenticator.invalidateCredentials()
+                    state = .retriedWithFreshCredentials
+                    continue
+                }
+                
+                // Not recoverable or already retried
+                throw error
+                
+            } catch {
+                // Handle non-AISecureError errors
+                
+                // Check for HTTP 401 in URLError or similar
+                if let urlError = error as? URLError {
+                    throw SilentLayerError.networkError(urlError.localizedDescription)
+                }
+                
                 throw error
             }
         }
@@ -103,34 +134,37 @@ internal struct SilentLayerServiceHelpers {
     
     // MARK: - Response Validation
     
-    static func validateResponse(_ response: URLResponse, data: Data) throws {
-        guard let http = response as? HTTPURLResponse else {
+    /// Validate HTTP response and convert to appropriate error if needed
+    ///
+    /// - Parameters:
+    ///   - response: The URLResponse to validate
+    ///   - data: The response data (for error parsing)
+    /// - Throws: AISecureError if response indicates an error
+    public static func validateResponse(_ response: URLResponse, data: Data) throws {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw SilentLayerError.invalidResponse
         }
         
-        guard (200...299).contains(http.statusCode) else {
-            let body = HTTPErrorBody(from: data)
-            logIf(.error)?.error("HTTP \(http.statusCode): \(body.message ?? "Unknown error")")
-            throw SilentLayerError.httpError(status: http.statusCode, body: body)
+        let statusCode = httpResponse.statusCode
+        
+        guard !(200...299).contains(statusCode) else {
+            return
         }
+        
+        let errorBody = HTTPErrorBody(from: data)
+        
+        logIf(.error)?.error("❌ HTTP \(statusCode): \(errorBody.message ?? errorBody.raw)")
+        
+        throw SilentLayerError.from(status: statusCode, body: errorBody)
     }
     
-    // MARK: - Private Helpers
-    
-    private static func resolveCredentials(
-        deviceAuthenticator: SilentLayerDeviceAuthenticator?,
-        forceRefresh: Bool
-    ) async throws -> SilentLayerCredentials {
-        guard let authenticator = deviceAuthenticator else {
-            throw SilentLayerError.invalidConfiguration("Device authenticator required")
-        }
-        return try await authenticator.getCredentials(forceRefresh: forceRefresh)
+    /// Parse error code from response data
+    ///
+    /// - Parameter data: Response data to parse
+    /// - Returns: The error code if found
+    public static func parseErrorCode(from data: Data) -> SilentLayerErrorCode? {
+        let body = HTTPErrorBody(from: data)
+        return body.code != .unknown ? body.code : nil
     }
     
-    private static func extractErrorCode(from body: Any?) -> String? {
-        if let data = body as? Data {
-            return HTTPErrorBody(from: data).code
-        }
-        return nil
-    }
 }

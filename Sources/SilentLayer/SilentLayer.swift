@@ -12,7 +12,7 @@ import Foundation
 /// SilentLayer SDK - Secure AI API proxy for iOS applications
 ///
 /// SilentLayer provides a secure way to access AI providers (OpenAI, Anthropic, Google, xAI)
-/// without exposing API keys in your mobile app. Features include:
+/// without exposing API keys in your iOS app. Features include:
 ///
 /// - **Security**: API keys never leave your server. Requests are authenticated via JWT.
 /// - **Multi-provider**: Single SDK for OpenAI, Anthropic, Gemini, and Grok.
@@ -40,12 +40,12 @@ import Foundation
 public enum SilentLayer {
     
     /// The current SDK version
-    public static let sdkVersion = "2.1.0"
+    public static let sdkVersion = "1.0.0"
     
     // MARK: - Configuration
     
     /// Production backend URL
-    private static let backendURL = "https://relates-treasury-pot-generate.trycloudflare.com"
+    private static let backendURL = "https://patient-treasure-gig-hook.trycloudflare.com"
     
     /// Configures the SilentLayer SDK logging
     ///
