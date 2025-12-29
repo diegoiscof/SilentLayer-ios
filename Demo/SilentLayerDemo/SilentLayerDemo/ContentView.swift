@@ -1,8 +1,8 @@
 //
-//  ContentView.swift
-//  SilentLayerDemo
+// ContentView.swift
+// SilentLayerDemo
 //
-//  Created by Diego Francisco Oruna Cabrera on 22/12/25.
+// Created by Diego Francisco Oruna Cabrera on 22/12/25.
 //
 
 import SwiftUI
@@ -18,79 +18,78 @@ func timestamp() -> String {
     return "[\(timeString).\(String(format: "%03d", milliseconds))]"
 }
 
+enum Provider: String, CaseIterable, Identifiable {
+    case openAI = "OpenAI"
+    case anthropic = "Anthropic"
+    case gemini = "Gemini"
+    case grok = "Grok"
+    
+    var id: Self { self }
+}
+
+struct Endpoint {
+    let name: String
+    let test: () async -> Void
+}
+
 struct ContentView: View {
-    
-    //For Audio
     @State private var audioPlayer: AVAudioPlayer?
-    
-    @State private var selectedProvider = 0
+    @State private var selectedProvider: Provider = .openAI
     @State private var selectedEndpoint = 0
     @State private var output = ""
     @State private var isLoading = false
-
-    let providers = ["OpenAI", "Anthropic", "Gemini", "Grok"]
     
-    let openAIServiceURL = "https://gateway.silentlayer.ai/openai-89d78484377bd859"
-
-    var openAIEndpoints: [(String, () async -> Void)] {
-        [
-            ("Chat Completion", testOpenAIChat),
-            ("Chat Completion (Streaming)", testOpenAIChatStream),
-            ("Chat with Structured Output", testOpenAIStructuredOutput),
-            ("Chat with Reasoning (o1/o3)", testOpenAIReasoning),
-            ("Responses API", testOpenAIResponse),
-            ("Responses API (Streaming)", testOpenAIResponseStream),
-            ("Image Generation (DALL-E)", testOpenAIImage),
-            ("Embeddings", testOpenAIEmbeddings),
-            ("Text-to-Speech", testOpenAITTS),
-            ("Content Moderation", testOpenAIModeration)
-        ]
-    }
-
-    var anthropicEndpoints: [(String, () async -> Void)] {
-        [
-            ("Create Message", testAnthropicMessage),
-            ("Create Message (Streaming)", testAnthropicMessageStream)
-        ]
-    }
-
-    var geminiEndpoints: [(String, () async -> Void)] {
-        [
-            ("Generate Content", testGeminiContent)
-        ]
-    }
-
-    var grokEndpoints: [(String, () async -> Void)] {
-        [
-            ("Chat Completion", testGrokChat),
-            ("Chat Completion (Streaming)", testGrokChatStream),
-            ("Chat with Vision", testGrokVision)
-        ]
-    }
-
-    var currentEndpoints: [(String, () async -> Void)] {
+    private let openAIServiceURL = ""
+    private let anthropicServiceURL = ""
+    private let geminiServiceURL = ""
+    private let grokServiceURL = ""
+    
+    private var currentEndpoints: [Endpoint] {
         switch selectedProvider {
-        case 0: return openAIEndpoints
-        case 1: return anthropicEndpoints
-        case 2: return geminiEndpoints
-        case 3: return grokEndpoints
-        default: return []
+        case .openAI:
+            return [
+                .init(name: "Chat Completion", test: testOpenAIChat),
+                .init(name: "Chat Completion (Streaming)", test: testOpenAIChatStream),
+                .init(name: "Chat with Structured Output", test: testOpenAIStructuredOutput),
+                .init(name: "Chat with Reasoning (o1/o3)", test: testOpenAIReasoning),
+                .init(name: "Responses API", test: testOpenAIResponse),
+                .init(name: "Responses API (Streaming)", test: testOpenAIResponseStream),
+                .init(name: "Image Generation (DALL-E)", test: testOpenAIImage),
+                .init(name: "Embeddings", test: testOpenAIEmbeddings),
+                .init(name: "Text-to-Speech", test: testOpenAITTS),
+                .init(name: "Content Moderation", test: testOpenAIModeration)
+            ]
+        case .anthropic:
+            return [
+                .init(name: "Create Message", test: testAnthropicMessage),
+                .init(name: "Create Message (Streaming)", test: testAnthropicMessageStream)
+            ]
+        case .gemini:
+            return [
+                .init(name: "Generate Content", test: testGeminiContent)
+            ]
+        case .grok:
+            return [
+                .init(name: "Chat Completion", test: testGrokChat),
+                .init(name: "Chat Completion (Streaming)", test: testGrokChatStream),
+                .init(name: "Chat with Vision", test: testGrokVision)
+            ]
         }
     }
-
-    var safeSelectedEndpoint: Int {
-        min(selectedEndpoint, max(0, currentEndpoints.count - 1))
+    
+    private var safeSelectedEndpoint: Int {
+        max(0, min(selectedEndpoint, currentEndpoints.count - 1))
     }
-
+    
     var body: some View {
         VStack(spacing: 20) {
             Text("SilentLayer SDK Demo")
                 .font(.largeTitle)
                 .bold()
-
+            
             Picker("Provider", selection: $selectedProvider) {
-                ForEach(0..<providers.count, id: \.self) { index in
-                    Text(providers[index]).tag(index)
+                ForEach(Provider.allCases) { provider in
+                    Text(provider.rawValue).tag(provider)
                 }
             }
             .pickerStyle(.segmented)
@@ -99,29 +98,29 @@ struct ContentView: View {
                 selectedEndpoint = 0
                 output = ""
             }
-
+            
             Picker("Endpoint", selection: $selectedEndpoint) {
-                ForEach(0..<currentEndpoints.count, id: \.self) { index in
-                    Text(currentEndpoints[index].0).tag(index)
+                ForEach(currentEndpoints.indices, id: \.self) { index in
+                    Text(currentEndpoints[index].name).tag(index)
                 }
             }
             .pickerStyle(.menu)
             .padding(.horizontal)
-
-            Button(action: {
+            
+            Button {
                 Task {
                     isLoading = true
                     output = "Loading...\n"
-                    await currentEndpoints[safeSelectedEndpoint].1()
+                    await currentEndpoints[safeSelectedEndpoint].test()
                     isLoading = false
                 }
-            }) {
+            } label: {
                 HStack {
                     if isLoading {
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
+                            .progressViewStyle(.circular)
                     }
-                    Text("Test \(currentEndpoints[safeSelectedEndpoint].0)")
+                    Text("Test \(currentEndpoints[safeSelectedEndpoint].name)")
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -131,7 +130,7 @@ struct ContentView: View {
             }
             .padding(.horizontal)
             .disabled(isLoading || currentEndpoints.isEmpty)
-
+            
             ScrollView {
                 Text(output)
                     .font(.system(.body, design: .monospaced))
@@ -148,23 +147,52 @@ struct ContentView: View {
             SilentLayer.configure(logLevel: .debug, timestamps: false)
         }
     }
+    
+    // MARK: - Helper Functions
+    
+    private func handleError(_ error: Error) {
+        let errorMessage = "\(timestamp()) Error: \(error.localizedDescription)"
+        output = errorMessage
+        print(errorMessage)
+    }
+    
+    private func formatRateLimitMessage(_ info: SilentLayerRateLimitInfo) -> String {
+        var message = "Rate limit reached."
+        if let used = info.used, let limit = info.limit {
+            message += " (\(used)/\(limit)"
+            if let period = info.period {
+                message += " \(period)"
+            }
+            message += ")"
+        }
+        message += " Try again in \(formatDuration(info.retryAfter))."
+        return message
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 {
+            return "\(seconds)s"
+        } else if seconds < 3600 {
+            return "\(seconds / 60)m \(seconds % 60)s"
+        } else {
+            return "\(seconds / 3600)h \(seconds % 3600 / 60)m"
+        }
+    }
+}
 
-    // MARK: - OpenAI tests with rate limit error examples
+// MARK: - OpenAI Tests
+
+extension ContentView {
     @MainActor
     func testOpenAIChat() async {
         do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
             let chatResponse = try await openAI.chat(
-                messages: [
-                    .init(role: "user", content: "Say hello in one sentence in spanish")
-                ],
+                messages: [.init(role: "user", content: "Say hello in one sentence in spanish")],
                 model: "gpt-4o-mini-2024-07-18"
             )
             let result = """
             \(timestamp()) ✅ Chat Completion Success
-
             Content: \(chatResponse.choices.first?.message.content ?? "")
             Model: \(chatResponse.model)
             Tokens: \(chatResponse.usage?.totalTokens ?? 0)
@@ -174,150 +202,25 @@ struct ContentView: View {
         } catch let error as SilentLayerError {
             switch error {
             case .userRateLimited(let info):
-                let message = formatRateLimitMessage(info)
-                output = "⏳ \(message)"
+                output = "⏳ \(formatRateLimitMessage(info))"
             case .planQuotaExceeded(let info):
                 output = "📊 Service quota reached. Resets in \(formatDuration(info.retryAfter))."
             default:
-                output = "❌ \(error.localizedDescription)"
+                handleError(error)
             }
         } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
-
-    @MainActor
-    func testOpenAIImage() async {
-        do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-            let imageResponse = try await openAI.generateImage(
-                prompt: "A futuristic cityscape at sunset",
-                model: "dall-e-3",
-                size: "1024x1024",
-                quality: "standard"
-            )
-            let result = """
-            \(timestamp()) ✅ Image Generation Success
-
-            URL: \(imageResponse.data.first?.url ?? "No URL")
-            Revised Prompt: \(imageResponse.data.first?.revisedPrompt ?? "N/A")
-            Created: \(imageResponse.created)
-            """
-            output = result
-            print(result)
-        } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
-        }
-    }
-
-    @MainActor
-    func testOpenAIEmbeddings() async {
-        do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-            let embeddingResponse = try await openAI.embeddings(
-                input: ["Hello, how are you?", "I'm doing great!"],
-                model: "text-embedding-ada-002"
-            )
-            let result = """
-            \(timestamp()) ✅ Embeddings Success
-
-            Model: \(embeddingResponse.model)
-            Embeddings Count: \(embeddingResponse.data.count)
-            First Embedding Dimensions: \(embeddingResponse.data.first?.embedding.count ?? 0)
-            Tokens: \(embeddingResponse.usage.totalTokens)
-            """
-            output = result
-            print(result)
-        } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
-        }
-    }
-
-    @MainActor
-    func testOpenAITTS() async {
-        do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-            let audioData = try await openAI.textToSpeech(
-                input: "Hello, this is a test of text to speech.",
-                model: "tts-1",
-                voice: "alloy"
-            )
-            self.audioPlayer = try AVAudioPlayer(data: audioData)
-            self.audioPlayer?.prepareToPlay()
-            self.audioPlayer?.play()
-            let result = """
-            \(timestamp()) ✅ Text-to-Speech Success
-
-            Audio Data Size: \(audioData.count) bytes
-            Model: tts-1
-            Voice: alloy
-            """
-            output = result
-            print(result)
-        } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
-        }
-    }
-
-    @MainActor
-    func testOpenAIModeration() async {
-        do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-            let modResponse = try await openAI.moderateContent(
-                input: "This is a perfectly safe and friendly message.",
-                model: "omni-moderation-latest"
-            )
-            let result = modResponse.results.first
-            let resultText = """
-            \(timestamp()) ✅ Content Moderation Success
-
-            Flagged: \(result?.flagged ?? false)
-            Model: \(modResponse.model)
-            Categories:
-              - Hate: \(result?.categories.hate ?? false)
-              - Violence: \(result?.categories.violence ?? false)
-              - Sexual: \(result?.categories.sexual ?? false)
-              - Harassment: \(result?.categories.harassment ?? false)
-            """
-            output = resultText
-            print(resultText)
-        } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
-        }
-    }
-
+    
     @MainActor
     func testOpenAIChatStream() async {
         do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
             output = "\(timestamp()) ⚡ Starting OpenAI Streaming Chat...\n\n"
             var fullResponse = ""
-
             try await openAI.chatStream(
-                messages: [
-                    .init(role: "user", content: "Count from 1 to 10, one number per line")
-                ],
+                messages: [.init(role: "user", content: "Count from 1 to 10, one number per line")],
                 model: "gpt-4o-mini-2024-07-18"
             ) { delta in
                 Task { @MainActor in
@@ -325,42 +228,31 @@ struct ContentView: View {
                         fullResponse += content
                         output = """
                         \(timestamp()) ⚡ Streaming...
-
                         \(fullResponse)
                         """
                     }
-
                     if let finishReason = delta.choices.first?.finishReason, finishReason == "stop" {
                         output += "\n\n\(timestamp()) ✅ Stream Complete!"
                     }
                 }
             }
-
             let finalOutput = """
             \(timestamp()) ✅ OpenAI Chat Stream Success
-
             Full Response:
             \(fullResponse)
-
             Model: gpt-4o-mini-2024-07-18
             """
             output = finalOutput
             print(finalOutput)
         } catch {
-            let error = "\(timestamp()) ❌ Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
-
+    
     @MainActor
     func testOpenAIStructuredOutput() async {
         do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-
-            // Define a JSON schema for structured output
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
             let schema: [String: Any] = [
                 "type": "object",
                 "properties": [
@@ -375,21 +267,15 @@ struct ContentView: View {
                 "required": ["name", "age", "occupation", "skills"],
                 "additionalProperties": false
             ]
-
             let chatResponse = try await openAI.chat(
-                messages: [
-                    .init(role: "user", content: "Create a fictional software engineer profile")
-                ],
+                messages: [.init(role: "user", content: "Create a fictional software engineer profile")],
                 model: "gpt-4o-mini-2024-07-18",
                 responseFormat: .jsonSchema(name: "engineer_profile", schema: schema, strict: true)
             )
-
             let result = """
             \(timestamp()) ✅ Structured Output Success
-
             JSON Response:
             \(chatResponse.choices.first?.message.content ?? "")
-
             Model: \(chatResponse.model)
             Tokens: \(chatResponse.usage?.totalTokens ?? 0)
             Response Format: JSON Schema (strict)
@@ -397,67 +283,45 @@ struct ContentView: View {
             output = result
             print(result)
         } catch {
-            let error = "\(timestamp()) ❌ Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
-
+    
     @MainActor
     func testOpenAIReasoning() async {
         do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-
-            // Note: reasoning_effort only works with o1/o3 models
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
             let chatResponse = try await openAI.chat(
-                messages: [
-                    .init(role: "user", content: "Solve: If a train travels 120 miles in 2 hours, how long will it take to travel 300 miles at the same speed?")
-                ],
+                messages: [.init(role: "user", content: "Solve: If a train travels 120 miles in 2 hours, how long will it take to travel 300 miles at the same speed?")],
                 model: "o1-2024-12-17",
-                reasoningEffort: .high  // Only use with o1/o3 models
+                reasoningEffort: .high
             )
-
             let result = """
             \(timestamp()) ✅ Chat Success (Reasoning Problem)
-
             Response:
             \(chatResponse.choices.first?.message.content ?? "")
-
             Model: \(chatResponse.model)
             Tokens: \(chatResponse.usage?.totalTokens ?? 0)
-
             Note: To use reasoning_effort parameter, use o1 or o3 models.
             """
             output = result
             print(result)
         } catch {
-            let error = "\(timestamp()) ❌ Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
-
+    
     @MainActor
     func testOpenAIResponse() async {
         do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-
-            // Note: Responses API with reasoning_effort only works with o1/o3 models
-            // For this demo, we'll use gpt-4o-mini without reasoning_effort
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
             let response = try await openAI.createResponse(
                 input: "Explain what makes Swift a great programming language in 2 sentences",
                 model: "gpt-4o-mini-2024-07-18"
-                // reasoningEffort: .medium  // Only use with o1/o3 models
             )
-
-            // Extract text from output
             var outputText = ""
-            if let output = response.output {
-                for item in output {
+            if let outputItems = response.output {
+                for item in outputItems {
                     if case .message(let msg) = item {
                         for content in msg.content {
                             if case .outputText(let text) = content {
@@ -467,102 +331,175 @@ struct ContentView: View {
                     }
                 }
             }
-
             let result = """
             \(timestamp()) ✅ Responses API Success
-
             Response:
             \(outputText)
-
             Model: \(response.model ?? "N/A")
             Status: \(response.status?.rawValue ?? "N/A")
             Input Tokens: \(response.usage?.inputTokens ?? 0)
             Output Tokens: \(response.usage?.outputTokens ?? 0)
             Total Tokens: \(response.usage?.totalTokens ?? 0)
-
             Note: To use reasoning_effort, use o1 or o3 models.
             """
             output = result
             print(result)
         } catch {
-            let error = "\(timestamp()) ❌ Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
-
+    
     @MainActor
     func testOpenAIResponseStream() async {
         do {
-            let openAI = try SilentLayer.openAIService(
-                serviceURL: openAIServiceURL
-            )
-
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
             output = "\(timestamp()) ⚡ Starting Responses API Streaming...\n\n"
             var fullResponse = ""
-
-            // Note: reasoning_effort only works with o1/o3 models
             try await openAI.createResponseStream(
                 input: "List 5 benefits of using AI in software development",
                 model: "gpt-4o-mini-2024-07-18"
-                // reasoningEffort: .low  // Only use with o1/o3 models
             ) { event in
                 Task { @MainActor in
-                    // Handle different event types from the Responses API
                     switch event.type {
                     case "response.output_text.delta":
-                        // Extract text delta from streaming event
                         if let delta = event.delta {
                             fullResponse += delta
                             self.output = """
                             \(timestamp()) ⚡ Streaming...
-
                             \(fullResponse)
                             """
                         }
                     case "response.completed":
                         self.output += "\n\n\(timestamp()) ✅ Stream Complete!"
                     default:
-                        // Ignore other event types (response.created, response.in_progress, etc.)
                         break
                     }
                 }
             }
-
             let finalOutput = """
             \(timestamp()) ✅ Responses API Stream Success
-
             Full Response:
             \(fullResponse)
-
             Model: gpt-4o-mini-2024-07-18
-
             Note: To use reasoning_effort, use o1 or o3 models.
             """
             output = finalOutput
             print(finalOutput)
         } catch {
-            let error = "\(timestamp()) ❌ Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
+    
+    @MainActor
+    func testOpenAIImage() async {
+        do {
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
+            let imageResponse = try await openAI.generateImage(
+                prompt: "A futuristic cityscape at sunset",
+                model: "dall-e-3",
+                size: "1024x1024",
+                quality: "standard"
+            )
+            let result = """
+            \(timestamp()) ✅ Image Generation Success
+            URL: \(imageResponse.data.first?.url ?? "No URL")
+            Revised Prompt: \(imageResponse.data.first?.revisedPrompt ?? "N/A")
+            Created: \(imageResponse.created)
+            """
+            output = result
+            print(result)
+        } catch {
+            handleError(error)
+        }
+    }
+    
+    @MainActor
+    func testOpenAIEmbeddings() async {
+        do {
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
+            let embeddingResponse = try await openAI.embeddings(
+                input: ["Hello, how are you?", "I'm doing great!"],
+                model: "text-embedding-ada-002"
+            )
+            let result = """
+            \(timestamp()) ✅ Embeddings Success
+            Model: \(embeddingResponse.model)
+            Embeddings Count: \(embeddingResponse.data.count)
+            First Embedding Dimensions: \(embeddingResponse.data.first?.embedding.count ?? 0)
+            Tokens: \(embeddingResponse.usage.totalTokens)
+            """
+            output = result
+            print(result)
+        } catch {
+            handleError(error)
+        }
+    }
+    
+    @MainActor
+    func testOpenAITTS() async {
+        do {
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
+            let audioData = try await openAI.textToSpeech(
+                input: "Hello, this is a test of text to speech.",
+                model: "tts-1",
+                voice: "alloy"
+            )
+            audioPlayer = try AVAudioPlayer(data: audioData)
+            audioPlayer?.prepareToPlay()
+            audioPlayer?.play()
+            let result = """
+            \(timestamp()) ✅ Text-to-Speech Success
+            Audio Data Size: \(audioData.count) bytes
+            Model: tts-1
+            Voice: alloy
+            """
+            output = result
+            print(result)
+        } catch {
+            handleError(error)
+        }
+    }
+    
+    @MainActor
+    func testOpenAIModeration() async {
+        do {
+            let openAI = try SilentLayer.openAIService(serviceURL: openAIServiceURL)
+            let modResponse = try await openAI.moderateContent(
+                input: "This is a perfectly safe and friendly message.",
+                model: "omni-moderation-latest"
+            )
+            let resultItem = modResponse.results.first
+            let resultText = """
+            \(timestamp()) ✅ Content Moderation Success
+            Flagged: \(resultItem?.flagged ?? false)
+            Model: \(modResponse.model)
+            Categories:
+              - Hate: \(resultItem?.categories.hate ?? false)
+              - Violence: \(resultItem?.categories.violence ?? false)
+              - Sexual: \(resultItem?.categories.sexual ?? false)
+              - Harassment: \(resultItem?.categories.harassment ?? false)
+            """
+            output = resultText
+            print(resultText)
+        } catch {
+            handleError(error)
+        }
+    }
+}
 
-    // MARK: - Anthropic Tests
+// MARK: - Anthropic Tests
 
+extension ContentView {
     @MainActor
     func testAnthropicMessage() async {
         do {
-            let anthropic = try SilentLayer.anthropicService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/anthropic-c521f42fe6a22781"
-            )
+            let anthropic = try SilentLayer.anthropicService(serviceURL: anthropicServiceURL)
             let response = try await anthropic.createMessage(
                 messages: [.init(role: "user", content: "Say a common italian phrase")],
                 maxTokens: 100
             )
             let result = """
             \(timestamp()) ✅ Anthropic Message Success
-
             Content: \(response.content.first?.text ?? "")
             Model: \(response.model)
             Input Tokens: \(response.usage.inputTokens)
@@ -571,37 +508,28 @@ struct ContentView: View {
             output = result
             print(result)
         } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
-
+    
     @MainActor
     func testAnthropicMessageStream() async {
         do {
-            let anthropic = try SilentLayer.anthropicService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/anthropic-c521f42fe6a22781"
-            )
-
+            let anthropic = try SilentLayer.anthropicService(serviceURL: anthropicServiceURL)
             output = "\(timestamp()) ⚡ Starting Anthropic Streaming Message...\n\n"
             var fullResponse = ""
-
             try await anthropic.createMessageStream(
                 messages: [.init(role: "user", content: "Write a short haiku about coding")],
                 maxTokens: 200
             ) { delta in
                 Task { @MainActor in
-                    // Anthropic sends different event types
                     if let text = delta.delta?.text {
                         fullResponse += text
                         output = """
                         \(timestamp()) ⚡ Streaming...
-
                         \(fullResponse)
                         """
-                    } else if let thinking = delta.delta?.thinking {
-                        // Optional: Print to console so you know it's not stuck
+                    } else if delta.delta?.thinking != nil {
                         print("🧠 Claude is thinking...")
                     }
                     if delta.type == "message_stop" {
@@ -609,41 +537,35 @@ struct ContentView: View {
                     }
                 }
             }
-
             let finalOutput = """
             \(timestamp()) ✅ Anthropic Message Stream Success
-
             Full Response:
             \(fullResponse)
-
             Model: claude-sonnet-4-5-20250929
             """
             output = finalOutput
             print(finalOutput)
         } catch {
-            let error = "\(timestamp()) ❌ Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
+}
 
-    // MARK: - Gemini Tests
+// MARK: - Gemini Tests
 
+extension ContentView {
     @MainActor
     func testGeminiContent() async {
         do {
-            let gemini = try SilentLayer.geminiService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/google-8b2a347a3e03e2de"
-            )
+            let gemini = try SilentLayer.geminiService(serviceURL: geminiServiceURL)
             let response = try await gemini.generateContent(
                 prompt: "Write a haiku about programming",
                 model: "gemini-2.0-flash-exp"
             )
-            let text = response.candidates?.first?.content?.parts.first?.text
+            let text = response.candidates?.first?.content?.parts.first?.text ?? "No content"
             let result = """
             \(timestamp()) ✅ Gemini Content Generation Success
-
-            Content: \(text ?? "No content")
+            Content: \(text)
             Finish Reason: \(response.candidates?.first?.finishReason ?? "N/A")
             Model: \(response.modelVersion ?? "N/A")
             Tokens: \(response.usageMetadata?.totalTokenCount ?? 0)
@@ -651,30 +573,25 @@ struct ContentView: View {
             output = result
             print(result)
         } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
+}
 
-    // MARK: - Grok Tests
+// MARK: - Grok Tests
 
+extension ContentView {
     @MainActor
     func testGrokChat() async {
         do {
-            let grok = try SilentLayer.grokService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a"
-            )
+            let grok = try SilentLayer.grokService(serviceURL: grokServiceURL)
             let chatResponse = try await grok.chat(
-                messages: [
-                    .init(role: "user", content: "Tell me a fun fact about space in one sentence")
-                ],
+                messages: [.init(role: "user", content: "Tell me a fun fact about space in one sentence")],
                 model: "grok-4",
                 temperature: 0.7
             )
             let result = """
             \(timestamp()) ✅ Grok Chat Completion Success
-
             Content: \(chatResponse.choices.first?.message.content ?? "")
             Model: \(chatResponse.model)
             Tokens: \(chatResponse.usage?.totalTokens ?? 0)
@@ -682,55 +599,18 @@ struct ContentView: View {
             output = result
             print(result)
         } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
-
-    @MainActor
-    func testGrokVision() async {
-        do {
-            let grok = try SilentLayer.grokService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a"
-            )
-            let chatResponse = try await grok.chatWithVision(
-                messages: [
-                    .init(role: "user", content: "Describe what makes a good software architecture")
-                ],
-                model: "grok-4-1-fast-reasoning",
-                temperature: 0.7
-            )
-            let result = """
-            \(timestamp()) ✅ Grok Vision Chat Success
-
-            Content: \(chatResponse.choices.first?.message.content ?? "")
-            Model: \(chatResponse.model)
-            Tokens: \(chatResponse.usage?.totalTokens ?? 0)
-            """
-            output = result
-            print(result)
-        } catch {
-            let error = "\(timestamp()) Error: \(error)"
-            output = error
-            print(error)
-        }
-    }
-
+    
     @MainActor
     func testGrokChatStream() async {
         do {
-            let grok = try SilentLayer.grokService(
-                serviceURL: "https://vgfdhpg2vaad64gic47d7y7aii0qkjtv.lambda-url.us-east-2.on.aws/grok-7f5c16f82f921f5a"
-            )
-
+            let grok = try SilentLayer.grokService(serviceURL: grokServiceURL)
             output = "\(timestamp()) ⚡ Starting Grok Streaming Chat...\n\n"
             var fullResponse = ""
-
             try await grok.chatStream(
-                messages: [
-                    .init(role: "user", content: "Count from 1 to 5, one number per line")
-                ],
+                messages: [.init(role: "user", content: "Count from 1 to 5, one number per line")],
                 model: "grok-4",
                 temperature: 0.7
             ) { delta in
@@ -739,54 +619,46 @@ struct ContentView: View {
                         fullResponse += content
                         output = """
                         \(timestamp()) ⚡ Streaming...
-
                         \(fullResponse)
                         """
                     }
-
                     if let finishReason = delta.choices.first?.finishReason, finishReason == "stop" {
                         output += "\n\n\(timestamp()) ✅ Stream Complete!"
                     }
                 }
             }
-
             let finalOutput = """
             \(timestamp()) ✅ Grok Chat Stream Success
-
             Full Response:
             \(fullResponse)
-
             Model: grok-4
             """
             output = finalOutput
             print(finalOutput)
         } catch {
-            let error = "\(timestamp()) ❌ Error: \(error)"
-            output = error
-            print(error)
+            handleError(error)
         }
     }
     
-    func formatRateLimitMessage(_ info: SilentLayerRateLimitInfo) -> String {
-        var message = "Rate limit reached."
-        if let used = info.used, let limit = info.limit {
-            message += " (\(used)/\(limit)"
-            if let period = info.period {
-                message += " \(period)"
-            }
-            message += ")"
-        }
-        message += " Try again in \(formatDuration(info.retryAfter))."
-        return message
-    }
-
-    func formatDuration(_ seconds: Int) -> String {
-        if seconds < 60 {
-            return "\(seconds)s"
-        } else if seconds < 3600 {
-            return "\(seconds / 60)m \(seconds % 60)s"
-        } else {
-            return "\(seconds / 3600)h \(seconds % 3600 / 60)m"
+    @MainActor
+    func testGrokVision() async {
+        do {
+            let grok = try SilentLayer.grokService(serviceURL: grokServiceURL)
+            let chatResponse = try await grok.chatWithVision(
+                messages: [.init(role: "user", content: "Describe what makes a good software architecture")],
+                model: "grok-4-1-fast-reasoning",
+                temperature: 0.7
+            )
+            let result = """
+            \(timestamp()) ✅ Grok Vision Chat Success
+            Content: \(chatResponse.choices.first?.message.content ?? "")
+            Model: \(chatResponse.model)
+            Tokens: \(chatResponse.usage?.totalTokens ?? 0)
+            """
+            output = result
+            print(result)
+        } catch {
+            handleError(error)
         }
     }
 }

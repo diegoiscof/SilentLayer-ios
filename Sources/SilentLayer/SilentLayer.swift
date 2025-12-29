@@ -45,7 +45,7 @@ public enum SilentLayer {
     // MARK: - Configuration
     
     /// Production backend URL
-    private static let backendURL = "https://patient-treasure-gig-hook.trycloudflare.com"
+    private static let backendURL = "https://api.silentlayer.ai"
     
     /// Configures the SilentLayer SDK logging
     ///
