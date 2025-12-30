@@ -468,7 +468,7 @@ The SDK handles authentication automatically. If you see this error:
 - **Email**: diego@silentlayer.ai
 
 ## License
-SilentLayer iOS SDK is available under the MIT License. See the [LICENSE](LICENSE) file for details.
+SilentLayer iOS SDK is available under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
 
 ---
 © 2025 SilentLayer. All rights reserved.
